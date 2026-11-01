@@ -161,7 +161,7 @@
   <div id="prevBanner" class="banner prev hidden"></div>
 
   <!-- ============ 家长端 ============ -->
-  <div id="parentView" class="hidden">
+  <div id="parentView">
     <div class="pages">
       <!-- 概览 -->
       <div class="page active" id="p-overview">
@@ -298,12 +298,14 @@
   }
   var AV_COLORS=['#2563EB','#0ea5e9','#16a34a','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6'];
 
-  /* ---------- 存储 ---------- */
+  /* ---------- 存储（沙箱/隐私模式下 localStorage 可能抛异常，统一兜底） ---------- */
+  function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+  function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
   function loadCfg(){
-    try{ var c=JSON.parse(localStorage.getItem(CFG_KEY)); if(c) return c; }catch(e){}
+    try{ var c=JSON.parse(lsGet(CFG_KEY)); if(c) return c; }catch(e){}
     return { password:'1234', managedApps:[] };
   }
-  function saveCfg(){ localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }
+  function saveCfg(){ lsSet(CFG_KEY, JSON.stringify(cfg)); }
   var cfg = loadCfg();
   function managedIndex(pkg){ for(var i=0;i<cfg.managedApps.length;i++){ if(cfg.managedApps[i].pkg===pkg) return i; } return -1; }
 
@@ -492,10 +494,10 @@
   }
   function showParent(){ mode='parent'; setSeg('parent');
     document.getElementById('parentView').classList.remove('hidden'); document.getElementById('childView').classList.add('hidden');
-    localStorage.setItem(MODE_KEY,'parent'); refreshPermStates(); refreshBanners(); renderOverview(); renderStats(); }
+    lsSet(MODE_KEY,'parent'); refreshPermStates(); refreshBanners(); renderOverview(); renderStats(); }
   function showChild(){ mode='child'; setSeg('child');
     document.getElementById('parentView').classList.add('hidden'); document.getElementById('childView').classList.remove('hidden');
-    localStorage.setItem(MODE_KEY,'child'); refreshBanners(); renderKid(); }
+    lsSet(MODE_KEY,'child'); refreshBanners(); renderKid(); }
   function requestParent(){
     if(!cfg.password){ showParent(); return; }
     var pwd=window.prompt('请输入家长密码：');
@@ -543,9 +545,11 @@
     refreshBanners();
   }, 5000);
 
-  /* ---------- 启动（默认进家长端，便于配置） ---------- */
-  var startMode = localStorage.getItem(MODE_KEY)||'parent';
-  if(startMode==='child'){ showChild(); } else { showParent(); }
+  /* ---------- 启动（默认进家长端，便于配置；任何异常都不影响界面显示） ---------- */
+  try{
+    var startMode = lsGet(MODE_KEY)||'parent';
+    if(startMode==='child'){ showChild(); } else { showParent(); }
+  }catch(e){ showParent(); }
   refreshBanners();
 })();
 </script>
