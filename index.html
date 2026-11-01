@@ -2,323 +2,408 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>游戏管理软件 · 第一版</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>游戏管理软件</title>
 <style>
-  *{ box-sizing:border-box; margin:0; padding:0; }
-  body{
-    font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
-    background:#eef1f5; color:#1f2329; min-height:100vh; padding:24px;
-    display:flex; gap:32px; flex-wrap:wrap; align-items:flex-start; justify-content:center;
-  }
-  header{ width:100%; max-width:920px; text-align:center; }
-  header h1{ font-size:20px; font-weight:600; }
-  header p{ font-size:13px; color:#6b7280; margin-top:6px; }
-  .note{ font-size:12px; color:#9aa1ac; margin-top:8px; }
-
-  .phone{
-    width:340px; height:720px; border-radius:44px; background:#0b0b0c; padding:14px;
-    box-shadow:0 12px 44px rgba(0,0,0,.28); position:relative; flex:0 0 auto;
-  }
-  .screen{
-    position:relative; width:100%; height:100%; border-radius:32px; overflow:hidden;
-    background:#f5f6f8; display:flex; flex-direction:column;
-  }
-  .statusbar{
-    height:30px; flex:0 0 30px; display:flex; align-items:center; justify-content:space-between;
-    padding:0 18px; font-size:12px; color:#1f2329; font-weight:600;
-  }
-
-  .modetoggle{ display:flex; background:#e7eaf0; margin:8px 14px; border-radius:12px; padding:3px; flex:0 0 auto; }
-  .modetoggle button{ flex:1; border:none; background:transparent; padding:9px; border-radius:9px; font-size:13px; font-weight:600; color:#6b7280; cursor:pointer; }
-  .modetoggle button.active{ background:#fff; color:#2563eb; box-shadow:0 1px 4px rgba(0,0,0,.08); }
-
-  .view{ flex:1; display:flex; flex-direction:column; min-height:0; }
-  .view.hidden{ display:none; }
-
-  .page{ flex:1; overflow-y:auto; padding:14px; display:none; }
+  :root{ --blue:#2563EB; --blue-d:#1d4ed8; --bg:#f3f5f9; --card:#fff; --txt:#1f2937; --mut:#6b7280; --line:#e5e7eb; --red:#dc2626; --green:#16a34a; --amber:#d97706; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; background:var(--bg); color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; }
+  #app{ max-width:480px; margin:0 auto; min-height:100vh; background:var(--bg); position:relative; }
+  .topbar{ display:flex; align-items:center; justify-content:space-between; padding:14px 16px 8px; }
+  .topbar .title{ font-size:18px; font-weight:700; }
+  .topbar .clock{ font-size:13px; color:var(--mut); }
+  .parent-entry{ font-size:13px; color:var(--blue); border:1px solid var(--blue); padding:5px 12px; border-radius:20px; background:#fff; }
+  .banner{ margin:8px 14px; padding:10px 12px; border-radius:10px; font-size:13px; line-height:1.5; }
+  .banner.warn{ background:#fef3c7; color:#92400e; border:1px solid #fde68a; }
+  .banner.prev{ background:#e0e7ff; color:#3730a3; border:1px solid #c7d2fe; }
+  /* tabs */
+  .tabs{ display:flex; background:#fff; border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+  .tabs .tab{ flex:1; text-align:center; padding:13px 0; font-size:14px; color:var(--mut); position:relative; }
+  .tabs .tab.active{ color:var(--blue); font-weight:600; }
+  .tabs .tab.active::after{ content:""; position:absolute; left:50%; transform:translateX(-50%); bottom:0; width:28px; height:3px; background:var(--blue); border-radius:2px; }
+  .page{ display:none; padding:14px; }
   .page.active{ display:block; }
-
-  .card{ background:#fff; border-radius:16px; padding:15px; box-shadow:0 2px 10px rgba(0,0,0,.04); margin-bottom:13px; }
-  .card h3{ font-size:14px; font-weight:600; margin-bottom:12px; }
-
-  .child{ display:flex; align-items:center; gap:12px; }
-  .avatar{ width:46px; height:46px; border-radius:50%; background:#2563eb; color:#fff; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:600; flex:0 0 46px; }
-  .child .name{ font-size:15px; font-weight:600; }
-  .child .device{ font-size:12px; color:#9aa1ac; }
-
-  .ring-wrap{ display:flex; flex-direction:column; align-items:center; margin:6px 0; position:relative; }
-  .ring-center{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; }
-  .ring-center .used{ font-size:26px; font-weight:700; }
-  .ring-center .total{ font-size:12px; color:#9aa1ac; }
-
-  .stat-row{ display:flex; justify-content:space-around; margin-top:4px; }
-  .stat{ text-align:center; }
-  .stat .v{ font-size:18px; font-weight:700; color:#2563eb; }
-  .stat .l{ font-size:12px; color:#9aa1ac; margin-top:2px; }
-
-  .status-badge{ display:inline-block; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:600; }
-  .badge-play{ background:#e7f3ff; color:#2563eb; }
-  .badge-lock{ background:#fde8e8; color:#e24b4a; }
-  .badge-idle{ background:#eef1f5; color:#6b7280; }
-
-  .field{ margin-bottom:11px; }
-  .field label{ display:block; font-size:12px; color:#6b7280; margin-bottom:5px; }
-  .field input{ width:100%; padding:10px 12px; border:1px solid #d8dce3; border-radius:10px; font-size:14px; }
-  .field input:focus{ outline:none; border-color:#2563eb; }
-  .row2{ display:flex; gap:10px; }
-  .row2 .field{ flex:1; }
-
-  .btn{ width:100%; padding:12px; border:none; border-radius:12px; font-size:14px; font-weight:600; cursor:pointer; }
-  .btn-primary{ background:#2563eb; color:#fff; }
-  .btn-danger{ background:#e24b4a; color:#fff; }
-  .btn-ghost{ background:#f2f4f7; color:#344054; }
-
-  .game{ display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid #f0f1f3; }
-  .game:last-child{ border-bottom:none; }
-  .game .icon{ width:40px; height:40px; border-radius:11px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:16px; font-weight:600; flex:0 0 40px; }
-  .game .info{ flex:1; }
-  .game .gname{ font-size:14px; font-weight:600; }
-  .game .gmeta{ font-size:12px; color:#9aa1ac; margin-top:2px; }
-  .game .glimit{ width:64px; padding:6px; border:1px solid #d8dce3; border-radius:8px; font-size:13px; text-align:center; }
-  .toggle{ width:44px; height:25px; border-radius:13px; background:#d0d5dd; position:relative; cursor:pointer; transition:background .2s; flex:0 0 44px; }
-  .toggle.on{ background:#2563eb; }
-  .toggle .knob{ position:absolute; top:3px; left:3px; width:19px; height:19px; border-radius:50%; background:#fff; transition:left .2s; }
-  .toggle.on .knob{ left:22px; }
-
-  .chart{ display:flex; align-items:flex-end; justify-content:space-between; height:140px; padding:0 4px; gap:8px; }
-  .bar-col{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; }
-  .bar{ width:55%; border-radius:6px 6px 0 0; background:linear-gradient(#4f8cff,#2563eb); }
-  .bar-label{ font-size:11px; color:#9aa1ac; margin-top:6px; }
-  .empty{ font-size:13px; color:#9aa1ac; text-align:center; padding:30px 0; }
-
-  .row-line{ display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid #f0f1f3; font-size:14px; }
-  .row-line:last-child{ border-bottom:none; }
-  .row-line .r{ color:#9aa1ac; font-size:13px; }
-
-  /* 孩子端 */
-  .child-stage{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:22px; gap:14px; text-align:center; }
-  .child-stage .big{ font-size:50px; font-weight:700; color:#2563eb; letter-spacing:1px; }
-  .child-stage .label{ font-size:14px; color:#6b7280; }
-  .child-stage .pwinput{ width:200px; padding:12px; border:1px solid #d8dce3; border-radius:12px; font-size:16px; text-align:center; letter-spacing:4px; }
-  .lock-face{ width:72px; height:72px; border-radius:18px; background:#e24b4a; color:#fff; display:flex; align-items:center; justify-content:center; font-size:30px; font-weight:700; }
-  .play-face{ width:64px; height:64px; border-radius:16px; background:#2563eb; color:#fff; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:700; }
-
-  .gamegrid{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; width:100%; padding:4px; }
-  .gcard{ background:#fff; border-radius:14px; padding:14px; display:flex; flex-direction:column; align-items:center; gap:8px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.05); border:2px solid transparent; }
-  .gcard.disabled{ opacity:.5; cursor:not-allowed; }
-  .gcard .gicon{ width:46px; height:46px; border-radius:13px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:18px; font-weight:600; }
-  .gcard .gname{ font-size:13px; font-weight:600; }
-  .gcard .gmeta{ font-size:11px; color:#9aa1ac; }
-
-  .tabbar{ flex:0 0 56px; height:56px; display:flex; background:#fff; border-top:1px solid #eceef1; }
-  .tab{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; cursor:pointer; color:#9aa1ac; font-size:11px; }
-  .tab.active{ color:#2563eb; }
-  .tab .dot{ width:20px; height:20px; border-radius:6px; background:currentColor; opacity:.85; }
+  .card{ background:var(--card); border-radius:14px; padding:16px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  .card h3{ margin:0 0 12px; font-size:15px; }
+  /* overview ring */
+  .ringwrap{ display:flex; align-items:center; gap:18px; }
+  .ring{ position:relative; width:140px; height:140px; flex:none; }
+  .ring svg{ transform:rotate(-90deg); }
+  .ring .mid{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .ring .mid .big{ font-size:26px; font-weight:700; }
+  .ring .mid .small{ font-size:12px; color:var(--mut); }
+  .ov-stats{ flex:1; }
+  .ov-stats .row{ display:flex; justify-content:space-between; padding:6px 0; font-size:14px; border-bottom:1px dashed var(--line); }
+  .ov-stats .row:last-child{ border-bottom:none; }
+  .ov-stats .row b{ font-weight:700; }
+  .status-badge{ display:inline-block; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:600; margin-top:4px; }
+  .badge-ok{ background:#dcfce7; color:#166534; }
+  .badge-warn{ background:#fef3c7; color:#92400e; }
+  .badge-lock{ background:#fee2e2; color:#991b1b; }
+  .btn{ display:block; width:100%; padding:13px; border:none; border-radius:12px; font-size:15px; font-weight:600; background:var(--blue); color:#fff; margin-top:6px; }
+  .btn:active{ background:var(--blue-d); }
+  .btn.ghost{ background:#fff; color:var(--blue); border:1px solid var(--blue); }
+  .btn.red{ background:var(--red); }
+  .btn.sm{ display:inline-block; width:auto; padding:7px 14px; font-size:13px; margin:0; }
+  /* apps list */
+  .search{ width:100%; padding:11px 14px; border:1px solid var(--line); border-radius:10px; font-size:14px; margin-bottom:12px; background:#fff; }
+  .approw{ display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); }
+  .approw:last-child{ border-bottom:none; }
+  .approw .ai{ width:38px; height:38px; border-radius:9px; background:var(--blue); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px; flex:none; }
+  .approw .info{ flex:1; min-width:0; }
+  .approw .info .n{ font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .approw .info .p{ font-size:11px; color:var(--mut); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .approw .info .u{ font-size:12px; color:var(--green); margin-top:2px; }
+  .toggle{ width:46px; height:26px; border-radius:13px; background:#cbd5e1; position:relative; flex:none; transition:.2s; }
+  .toggle.on{ background:var(--blue); }
+  .toggle .knob{ position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:#fff; transition:.2s; }
+  .toggle.on .knob{ left:23px; }
+  .limitbox{ display:none; align-items:center; gap:4px; margin-top:6px; }
+  .limitbox.show{ display:flex; }
+  .limitbox input{ width:56px; padding:5px 6px; border:1px solid var(--line); border-radius:7px; font-size:13px; text-align:center; }
+  .limitbox span{ font-size:12px; color:var(--mut); }
+  /* stats */
+  .st-row{ margin-bottom:16px; }
+  .st-row .hd{ display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px; }
+  .st-row .hd b{ font-weight:700; }
+  .bar{ height:10px; background:#eef2f7; border-radius:5px; overflow:hidden; }
+  .bar > i{ display:block; height:100%; background:var(--blue); border-radius:5px; }
+  .bar.over > i{ background:var(--red); }
+  .week{ display:flex; gap:5px; margin-top:7px; align-items:flex-end; height:46px; }
+  .week .d{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; }
+  .week .d .col{ width:100%; background:#bfdbfe; border-radius:3px 3px 0 0; min-height:2px; }
+  .week .d .lab{ font-size:9px; color:var(--mut); margin-top:2px; }
+  /* kid */
+  #childView{ padding:0 14px 20px; }
+  .kid-hd{ padding:16px 0 8px; text-align:center; }
+  .kid-hd .t{ font-size:17px; font-weight:700; }
+  .kid-hd .play{ font-size:13px; color:var(--mut); margin-top:4px; }
+  .kid-card{ background:#fff; border-radius:14px; padding:16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  .kid-card .nm{ font-size:15px; font-weight:700; }
+  .kid-card .rem{ font-size:34px; font-weight:800; color:var(--blue); margin:6px 0; }
+  .kid-card .rem small{ font-size:15px; font-weight:600; color:var(--mut); }
+  .kid-card .meta{ font-size:12px; color:var(--mut); }
+  .kid-card.over .rem{ color:var(--red); }
+  .kid-card .pbar{ height:8px; background:#eef2f7; border-radius:4px; overflow:hidden; margin-top:8px; }
+  .kid-card .pbar > i{ display:block; height:100%; background:var(--blue); }
+  .kid-card.over .pbar > i{ background:var(--red); }
+  /* lock overlay */
+  #lockOverlay{ position:fixed; inset:0; background:rgba(17,24,39,.96); color:#fff; display:none; flex-direction:column; align-items:center; justify-content:center; z-index:50; padding:24px; text-align:center; }
+  #lockOverlay.show{ display:flex; }
+  #lockOverlay .big{ font-size:30px; font-weight:800; margin-bottom:10px; }
+  #lockOverlay .sub{ font-size:14px; color:#cbd5e1; line-height:1.6; }
+  .hidden{ display:none !important; }
+  .empty{ text-align:center; color:var(--mut); font-size:13px; padding:30px 10px; line-height:1.7; }
+  .perm-row{ display:flex; align-items:center; justify-content:space-between; padding:11px 0; border-bottom:1px solid var(--line); font-size:14px; }
+  .perm-row:last-child{ border-bottom:none; }
+  .perm-state{ font-size:13px; font-weight:600; }
+  .perm-state.ok{ color:var(--green); }
+  .perm-state.no{ color:var(--red); }
+  .field{ width:100%; padding:11px 14px; border:1px solid var(--line); border-radius:10px; font-size:14px; margin-bottom:10px; background:#fff; }
+  .note{ font-size:12px; color:var(--mut); line-height:1.6; margin-top:6px; }
 </style>
 </head>
 <body>
-  <header>
-    <h1>游戏管理软件 · 第一版（真实可用版）</h1>
-    <p>家长端 / 孩子端双模式 · 密码 + 时长真管控 · 数据存本机 · 可打包成 APK 装手机</p>
-    <p class="note">默认家长密码 1234，每日上限 120 分钟。孩子端选游戏、输密码才开始计时，到时自动锁。</p>
-  </header>
-
-  <div class="phone">
-    <div class="screen">
-      <div class="statusbar"><span id="sbTime">9:41</span><span>5G · 100%</span></div>
-
-      <div class="modetoggle">
-        <button data-mode="parent" class="active">家长端</button>
-        <button data-mode="child">孩子端</button>
-      </div>
-
-      <!-- ===== 家长端 ===== -->
-      <div class="view" id="parentView">
-        <div class="page active" id="p-home">
-          <div class="card">
-            <div class="child">
-              <div class="avatar">明</div>
-              <div>
-                <div class="name">小明</div>
-                <div class="device">设备：荣耀 X70 · 已绑定</div>
-              </div>
-              <span class="status-badge badge-idle" id="statusBadge" style="margin-left:auto;">空闲</span>
-            </div>
-
-            <div class="ring-wrap">
-              <svg width="150" height="150" viewBox="0 0 150 150">
-                <circle cx="75" cy="75" r="62" fill="none" stroke="#eceef1" stroke-width="13"/>
-                <circle id="ringUsed" cx="75" cy="75" r="62" fill="none" stroke="#2563eb" stroke-width="13"
-                  stroke-linecap="round" stroke-dasharray="389.56" stroke-dashoffset="389.56"
-                  transform="rotate(-90 75 75)"/>
-              </svg>
-              <div class="ring-center">
-                <div class="used"><span id="usedMin">0</span><span style="font-size:14px">分</span></div>
-                <div class="total">/ <span id="limitMin">120</span>分 今日</div>
-              </div>
-            </div>
-
-            <div class="stat-row">
-              <div class="stat"><div class="v" id="remainMin">120</div><div class="l">剩余(分)</div></div>
-              <div class="stat"><div class="v" id="bonusMin">0</div><div class="l">已加时(分)</div></div>
-              <div class="stat"><div class="v" id="sessCount">0</div><div class="l">今日局数</div></div>
-            </div>
-          </div>
-
-          <div class="card">
-            <h3>基础设置</h3>
-            <div class="field">
-              <label>家长密码（孩子开始游戏 / 解锁需输入）</label>
-              <input type="text" id="setPw" placeholder="如 1234">
-            </div>
-            <div class="row2">
-              <div class="field">
-                <label>每日上限(分)</label>
-                <input type="number" id="setLimit" min="0" value="120">
-              </div>
-              <div class="field">
-                <label>可用时段</label>
-                <input type="text" id="setWindow" value="19:00-21:00">
-              </div>
-            </div>
-            <button class="btn btn-primary" id="saveCfg">保存设置</button>
-            <button class="btn btn-ghost" id="addTime" style="margin-top:9px;">临时加时 +15 分钟</button>
-          </div>
-
-          <div class="card">
-            <h3>系统能力（真锁屏 / 拦截需授权）</h3>
-            <div class="row-line"><span>设备管理员</span><span class="r" id="adminState">未检测</span></div>
-            <div class="row-line"><span>用量统计权限</span><span class="r" id="usageState">未检测</span></div>
-            <button class="btn btn-ghost" id="enableAdmin" style="margin-top:6px;">启用设备管理员</button>
-            <button class="btn btn-ghost" id="enableUsage" style="margin-top:9px;">授予用量统计</button>
-          </div>
-          <div class="card">
-            <h3>设备控制</h3>
-            <button class="btn btn-danger" id="lockBtn">一键锁机</button>
-            <button class="btn btn-ghost" id="resetBtn" style="margin-top:9px;">重置今日时长</button>
-          </div>
-        </div>
-
-        <div class="page" id="p-games">
-          <div class="card">
-            <h3>受管控游戏</h3>
-            <div id="gameList"></div>
-          </div>
-        </div>
-
-        <div class="page" id="p-stats">
-          <div class="card">
-            <h3>近 7 天游戏时长（分钟 · 真实记录）</h3>
-            <div class="chart" id="weekChart"></div>
-          </div>
-          <div class="card">
-            <h3>今日游戏时长排行（真实记录）</h3>
-            <div id="rankList"></div>
-          </div>
-        </div>
-
-        <div class="page" id="p-me">
-          <div class="card">
-            <h3>账户与设备</h3>
-            <div class="row-line"><span>家长账号</span><span class="r">138****6677</span></div>
-            <div class="row-line"><span>绑定设备</span><span class="r">荣耀 X70</span></div>
-            <div class="row-line"><span>家长密码</span><span class="r" id="pwState">已设置</span></div>
-          </div>
-          <div class="card">
-            <h3>设置</h3>
-            <div class="row-line"><span>每日时长上限</span><span class="r" id="meLimit">120 分钟</span></div>
-            <div class="row-line"><span>可用时段</span><span class="r" id="meWindow">19:00-21:00</span></div>
-            <div class="row-line"><span>超时自动锁机</span><span class="r">开启</span></div>
-          </div>
-          <button class="btn btn-ghost">关于游戏管理软件</button>
-        </div>
-
-        <div class="tabbar">
-          <div class="tab active" data-page="home"><span class="dot"></span>概览</div>
-          <div class="tab" data-page="games"><span class="dot"></span>游戏</div>
-          <div class="tab" data-page="stats"><span class="dot"></span>统计</div>
-          <div class="tab" data-page="me"><span class="dot"></span>我的</div>
-        </div>
-      </div>
-
-      <!-- ===== 孩子端 ===== -->
-      <div class="view hidden" id="childView">
-        <div class="child-stage" id="childStage"></div>
-      </div>
+<div id="app">
+  <div class="topbar">
+    <div class="title">游戏管理软件</div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span class="clock" id="sbTime">--:--</span>
+      <button class="parent-entry" id="toParent">家长入口</button>
     </div>
   </div>
+
+  <div id="permBanner" class="banner warn hidden"></div>
+  <div id="prevBanner" class="banner prev hidden"></div>
+
+  <!-- ============ 家长端 ============ -->
+  <div id="parentView" class="hidden">
+    <div class="tabs">
+      <div class="tab active" data-page="overview">概览</div>
+      <div class="tab" data-page="apps">应用</div>
+      <div class="tab" data-page="stats">统计</div>
+      <div class="tab" data-page="me">我的</div>
+    </div>
+
+    <!-- 概览 -->
+    <div class="page active" id="p-overview">
+      <div class="card">
+        <div class="ringwrap">
+          <div class="ring">
+            <svg width="140" height="140">
+              <circle cx="70" cy="70" r="62" fill="none" stroke="#eef2f7" stroke-width="12"/>
+              <circle id="ringUsed" cx="70" cy="70" r="62" fill="none" stroke="var(--blue)" stroke-width="12" stroke-linecap="round" stroke-dasharray="389.56" stroke-dashoffset="389.56"/>
+            </svg>
+            <div class="mid"><div class="big" id="ovUsed">0</div><div class="small">今日已用(分)</div></div>
+          </div>
+          <div class="ov-stats">
+            <div class="row"><span>总限额</span><b id="ovLimit">0 分</b></div>
+            <div class="row"><span>剩余</span><b id="ovRemain">0 分</b></div>
+            <div class="row"><span>状态</span><span id="ovBadge" class="status-badge badge-warn">未配置</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <button class="btn red" id="lockBtn">一键锁机</button>
+        <div class="note">超额后系统会按真实用量自动锁屏/退回桌面（需设备管理员+用量权限）。</div>
+      </div>
+    </div>
+
+    <!-- 应用 -->
+    <div class="page" id="p-apps">
+      <div class="card">
+        <h3>选择要管控的应用</h3>
+        <div class="note">以下为手机<b>真实已装应用</b>。开启开关即纳入管控并设置每日分钟数。</div>
+        <input class="search" id="appSearch" placeholder="搜索应用名…">
+        <div id="appList"></div>
+        <div id="appEmpty" class="empty hidden">无法读取已装应用。请确认在真机/模拟器中运行，并已授予必要权限。</div>
+      </div>
+    </div>
+
+    <!-- 统计 -->
+    <div class="page" id="p-stats">
+      <div class="card" id="statsCard"><div class="empty">尚未选择受管控应用。</div></div>
+    </div>
+
+    <!-- 我的 -->
+    <div class="page" id="p-me">
+      <div class="card">
+        <h3>家长密码</h3>
+        <input class="field" id="pwInput" type="password" placeholder="设置家长密码">
+        <button class="btn ghost sm" id="pwSave">保存密码</button>
+        <div class="note">进入家长端需输入此密码，防止孩子篡改设置。默认 1234。</div>
+      </div>
+      <div class="card">
+        <h3>系统能力授权</h3>
+        <div class="perm-row"><span>设备管理员（真锁屏）</span><span id="adminState" class="perm-state no">未启用</span></div>
+        <div class="perm-row"><span>使用情况访问（真实时长）</span><span id="usageState" class="perm-state no">未授予</span></div>
+        <div class="perm-row"><span>无障碍（退回桌面拦截）</span><span id="accState" class="perm-state no">未开启</span></div>
+        <button class="btn ghost sm" id="enableAdmin" style="margin-top:8px;">启用设备管理员</button>
+        <button class="btn ghost sm" id="enableUsage" style="margin-top:8px;">授予用量权限</button>
+        <button class="btn ghost sm" id="enableAcc" style="margin-top:8px;">开启无障碍</button>
+      </div>
+      <div class="card">
+        <h3>重置</h3>
+        <button class="btn ghost sm" id="stopMonitor">停止监控</button>
+        <button class="btn ghost sm red" id="resetAll" style="margin-top:8px;">清空所有管控配置</button>
+      </div>
+      <div class="note">v2 · 数据全部来自手机真实用量（UsageStatsManager）与已装应用（PackageManager）。</div>
+    </div>
+  </div>
+
+  <!-- ============ 孩子端 ============ -->
+  <div id="childView" class="hidden">
+    <div class="kid-hd">
+      <div class="t">我的可用时间</div>
+      <div class="play" id="kidPlaying">—</div>
+    </div>
+    <div id="kidList"></div>
+    <div id="kidEmpty" class="empty">家长尚未设置任何应用。</div>
+  </div>
+
+  <!-- 锁屏遮罩 -->
+  <div id="lockOverlay">
+    <div class="big">⏰ 今日时间已用完</div>
+    <div class="sub" id="lockSub">该应用已达到每日限额。<br>请让家长在「家长入口」中为该应用加时。</div>
+  </div>
+</div>
 
 <script>
 (function(){
   "use strict";
+  var CFG_KEY='gm_config_v2', EVT_KEY='gm_events_v2', MODE_KEY='gm_mode';
+  var NATIVE = (typeof GameBridge !== 'undefined');
 
-  /* ---------- 真实数据结构（localStorage 持久化） ---------- */
-  var CONFIG_KEY='gm_config_v1', STATE_KEY='gm_state_v1';
+  /* ---------- 存储 ---------- */
+  function loadCfg(){
+    try{ var c=JSON.parse(localStorage.getItem(CFG_KEY)); if(c) return c; }catch(e){}
+    return { password:'1234', managedApps:[] };
+  }
+  function saveCfg(){ localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }
+  var cfg = loadCfg();
+  function managedIndex(pkg){ for(var i=0;i<cfg.managedApps.length;i++){ if(cfg.managedApps[i].pkg===pkg) return i; } return -1; }
 
-  function defaultConfig(){
-    return {
-      password:'1234', dailyLimit:120, bonus:0, window:'19:00-21:00',
-      games:[
-        {name:'王者荣耀',color:'#f0883e',limit:90,enabled:true},
-        {name:'和平精英',color:'#3aa675',limit:60,enabled:true},
-        {name:'原神',    color:'#5aa0e0',limit:45,enabled:true},
-        {name:'蛋仔派对',color:'#e06aa8',limit:30,enabled:false}
-      ]
-    };
-  }
-  function loadConfig(){
-    try{ var c=JSON.parse(localStorage.getItem(CONFIG_KEY)); if(c&&c.games) return c; }catch(e){}
-    return defaultConfig();
-  }
-  function saveConfig(){ localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }
-
-  function todayStr(){ var d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
-  function loadState(){
-    try{ var s=JSON.parse(localStorage.getItem(STATE_KEY)); if(s) return s; }catch(e){}
-    return { date:todayStr(), usedSeconds:0, locked:false, session:null, log:[] };
-  }
-  function saveState(){ localStorage.setItem(STATE_KEY, JSON.stringify(state)); }
-
-  var config = loadConfig();
-  var state  = loadState();
-  if(state.date !== todayStr()){
-    state = { date:todayStr(), usedSeconds:0, locked:false, session:null, log:[] };
-    saveState();
-  }
-
-  function effectiveLimitSec(){ return (config.dailyLimit + config.bonus) * 60; }
-  function fmt(sec){
-    sec=Math.max(0,Math.floor(sec));
-    var m=Math.floor(sec/60), s=sec%60;
-    return (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
-  }
-  function gameUsedToday(name){
-    var sum=0;
-    (state.log||[]).forEach(function(e){
-      if(e.game===name && e.date===todayStr()) sum += e.durationSec;
-    });
-    return sum;
-  }
-
-  // 原生桥接支持检测（WebView 壳注入 window.GameBridge 时可用）
-  function nativeOK(){ return (typeof GameBridge !== 'undefined'); }
-  // 示例：游戏名 -> 真实包名（按需替换为实际包名）
-  var SAMPLE_PKGS = { '王者荣耀':'com.tencent.tmgp.sgame', '和平精英':'com.tencent.tmgp.pubgm', '原神':'com.miHoYo.Yuanshen', '蛋仔派对':'com.netease.dj' };
-  function blockedPkgsCsv(){
-    var arr=[];
-    config.games.forEach(function(g){ if(g.enabled && SAMPLE_PKGS[g.name]) arr.push(SAMPLE_PKGS[g.name]); });
-    return arr.join(',');
-  }
+  /* ---------- 原生封装 ---------- */
+  function nb(method){ try{ if(NATIVE) return GameBridge[method].apply(GameBridge, Array.prototype.slice.call(arguments,1)); }catch(e){} return null; }
+  function hasUsage(){ if(!NATIVE) return false; try{ return GameBridge.hasUsagePermission(); }catch(e){ return false; } }
+  function isAdmin(){ if(!NATIVE) return false; try{ return GameBridge.isAdminActive(); }catch(e){ return false; } }
+  function isAcc(){ if(!NATIVE) return false; try{ return GameBridge.isAccessibilityOn(); }catch(e){ return false; } }
 
   /* ---------- 时钟 ---------- */
-  function tickClock(){
-    var n=new Date(), hh=n.getHours(), mm=(n.getMinutes()<10?'0':'')+n.getMinutes();
-    document.getElementById('sbTime').textContent=hh+':'+mm;
-  }
+  function tickClock(){ var n=new Date(),h=n.getHours(),m=(n.getMinutes()<10?'0':'')+n.getMinutes(); document.getElementById('sbTime').textContent=h+':'+m; }
   tickClock(); setInterval(tickClock,1000);
 
-  /* ---------- 家长端 Tab ---------- */
+  /* ---------- 横幅 ---------- */
+  function refreshBanners(){
+    var pb=document.getElementById('permBanner'), pv=document.getElementById('prevBanner');
+    if(!NATIVE){ pv.classList.remove('hidden'); pv.textContent='网页预览模式：当前无真实设备数据，以下功能仅展示结构。安装 APK 后即为真实可用。'; pb.classList.add('hidden'); return; }
+    pv.classList.add('hidden');
+    if(!hasUsage()){ pb.classList.remove('hidden'); pb.innerHTML='⚠ 未授予「使用情况访问」权限，无法读取真实使用时长。<button class="btn ghost sm" style="margin-left:8px;" onclick="GameBridge.openUsageSettings()">去授予</button>'; }
+    else { pb.classList.add('hidden'); }
+  }
+
+  /* ---------- 权限状态 ---------- */
+  function refreshPermStates(){
+    if(!document.getElementById('adminState')) return;
+    document.getElementById('adminState').textContent = isAdmin()?'已启用':'未启用';
+    document.getElementById('adminState').className = 'perm-state '+(isAdmin()?'ok':'no');
+    document.getElementById('usageState').textContent = hasUsage()?'已授予':'未授予';
+    document.getElementById('usageState').className = 'perm-state '+(hasUsage()?'ok':'no');
+    document.getElementById('accState').textContent = isAcc()?'已开启':'未开启';
+    document.getElementById('accState').className = 'perm-state '+(isAcc()?'ok':'no');
+  }
+
+  /* ---------- 真实用量读取 ---------- */
+  function getAllUsage(){ // {pkg:ms}
+    if(!NATIVE||!hasUsage()) return {};
+    try{ return JSON.parse(GameBridge.getAllUsageToday()); }catch(e){ return {}; }
+  }
+  function usageMin(pkg, map){ return Math.round(((map&&map[pkg])||0)/60000); }
+
+  /* ---------- 推送管控配置到原生 ---------- */
+  function pushManaged(){
+    if(!NATIVE) return;
+    try{ GameBridge.setManagedApps(JSON.stringify(cfg.managedApps.map(function(a){return {pkg:a.pkg,limit:a.limit};}))); }catch(e){}
+  }
+
+  /* ---------- 概览 ---------- */
+  function renderOverview(){
+    var map=getAllUsage();
+    var totalLimit=0, totalUsed=0;
+    cfg.managedApps.forEach(function(a){ totalLimit+=a.limit; totalUsed+=usageMin(a.pkg,map); });
+    document.getElementById('ovUsed').textContent=totalUsed;
+    document.getElementById('ovLimit').textContent=totalLimit+' 分';
+    document.getElementById('ovRemain').textContent=Math.max(0,totalLimit-totalUsed)+' 分';
+    var ratio= totalLimit>0 ? Math.min(1, totalUsed/totalLimit) : 0;
+    document.getElementById('ringUsed').setAttribute('stroke-dashoffset', (389.56*(1-ratio)).toFixed(2));
+    var badge=document.getElementById('ovBadge');
+    var over=cfg.managedApps.some(function(a){ return usageMin(a.pkg,map)>=a.limit; });
+    if(cfg.managedApps.length===0){ badge.textContent='未配置'; badge.className='status-badge badge-warn'; }
+    else if(over){ badge.textContent='已超限'; badge.className='status-badge badge-lock'; }
+    else { badge.textContent='监控中'; badge.className='status-badge badge-ok'; }
+  }
+
+  /* ---------- 应用列表（真实已装） ---------- */
+  var allApps=[];
+  function loadApps(){
+    var box=document.getElementById('appList'), empty=document.getElementById('appEmpty');
+    if(!NATIVE){ box.innerHTML='<div class="empty">真机中此处显示手机真实已装应用。</div>'; empty.classList.add('hidden'); return; }
+    try{ allApps=JSON.parse(GameBridge.listInstalledApps()); }catch(e){ allApps=[]; }
+    if(!allApps||allApps.length===0){ box.innerHTML=''; empty.classList.remove('hidden'); return; }
+    empty.classList.add('hidden');
+    renderAppList();
+  }
+  function renderAppList(){
+    var box=document.getElementById('appList');
+    var q=(document.getElementById('appSearch').value||'').trim().toLowerCase();
+    var map=getAllUsage();
+    var html='';
+    allApps.forEach(function(a){
+      if(q && a.name.toLowerCase().indexOf(q)<0 && a.pkg.toLowerCase().indexOf(q)<0) return;
+      var idx=managedIndex(a.pkg), on=idx>=0;
+      var limit= on? cfg.managedApps[idx].limit : 30;
+      var used= usageMin(a.pkg, map);
+      html+='<div class="approw">'
+        +'<div class="ai">'+a.name.charAt(0)+'</div>'
+        +'<div class="info"><div class="n">'+esc(a.name)+'</div><div class="p">'+esc(a.pkg)+'</div>'
+        +(on?'<div class="u">今日真实已用 '+used+' 分</div>':'')
+        +'<div class="limitbox'+(on?' show':'')+'" data-pkg="'+esc(a.pkg)+'">限额 <input type="number" min="1" value="'+limit+'" onchange="onLimitChange(\''+esc(a.pkg)+'\',this.value)"> 分/天</div>'
+        +'</div>'
+        +'<div class="toggle'+(on?' on':'')+'" data-pkg="'+esc(a.pkg)+'" data-name="'+esc(a.name)+'" onclick="onToggle(this)"><div class="knob"></div></div>'
+        +'</div>';
+    });
+    box.innerHTML= html || '<div class="empty">无匹配应用。</div>';
+  }
+  window.onToggle=function(el){
+    var pkg=el.getAttribute('data-pkg'), name=el.getAttribute('data-name');
+    var idx=managedIndex(pkg);
+    if(idx>=0){ cfg.managedApps.splice(idx,1); }
+    else { cfg.managedApps.push({pkg:pkg,name:name,limit:30}); }
+    saveCfg(); pushManaged();
+    renderAppList(); renderOverview(); renderStats();
+  };
+  window.onLimitChange=function(pkg,val){
+    var idx=managedIndex(pkg); if(idx<0) return;
+    var v=parseInt(val,10); if(isNaN(v)||v<1) v=1;
+    cfg.managedApps[idx].limit=v; saveCfg(); pushManaged();
+    renderOverview(); renderStats();
+  };
+  document.getElementById('appSearch').addEventListener('input', renderAppList);
+
+  /* ---------- 统计 ---------- */
+  function renderStats(){
+    var card=document.getElementById('statsCard');
+    if(cfg.managedApps.length===0){ card.innerHTML='<div class="empty">尚未选择受管控应用。</div>'; return; }
+    var map=getAllUsage();
+    var html='';
+    cfg.managedApps.forEach(function(a){
+      var used=usageMin(a.pkg,map), lim=a.limit, ratio=Math.min(1,used/lim), over=used>=lim;
+      html+='<div class="st-row"><div class="hd"><b>'+esc(a.name)+'</b><span class="'+(over?'perm-state no':'')+'">'+used+' / '+lim+' 分</span></div>'
+        +'<div class="bar'+(over?' over':'')+'"><i style="width:'+(ratio*100).toFixed(0)+'%"></i></div>';
+      // 7天真实序列
+      var series=[];
+      if(NATIVE){ try{ series=JSON.parse(GameBridge.getUsageSeries(a.pkg,7)); }catch(e){ series=[]; } }
+      if(series.length){
+        var max=Math.max.apply(null, series.map(function(x){return Math.round(x/60000);}).concat([lim]));
+        html+='<div class="week">';
+        var labs=['日','一','二','三','四','五','六'];
+        series.forEach(function(x,i){ var m=Math.round(x/60000); var h=max>0?(m/max*100):0;
+          var d=new Date(); d.setDate(d.getDate()-(series.length-1-i));
+          html+='<div class="d"><div class="col" style="height:'+Math.max(2,h).toFixed(0)+'%" title="'+m+'分"></div><div class="lab">'+labs[d.getDay()]+'</div></div>'; });
+        html+='</div>';
+      }
+      html+='<button class="btn ghost sm" style="margin-top:8px;" onclick="addTime(\''+esc(a.pkg)+'\')">+15分加时</button>';
+      html+='</div>';
+    });
+    card.innerHTML=html;
+  }
+  window.addTime=function(pkg){
+    var idx=managedIndex(pkg); if(idx<0) return;
+    cfg.managedApps[idx].limit+=15; saveCfg(); pushManaged();
+    renderStats(); renderOverview();
+    if(NATIVE){ try{ GameBridge.toast('已为 '+cfg.managedApps[idx].name+' 加时 15 分'); }catch(e){} }
+  };
+
+  /* ---------- 孩子端 ---------- */
+  function renderKid(){
+    var list=document.getElementById('kidList'), empty=document.getElementById('kidEmpty');
+    if(cfg.managedApps.length===0){ list.innerHTML=''; empty.classList.remove('hidden'); return; }
+    empty.classList.add('hidden');
+    var map=getAllUsage();
+    var overAny=false, html='';
+    cfg.managedApps.forEach(function(a){
+      var used=usageMin(a.pkg,map), lim=a.limit, remain=Math.max(0,lim-used), over=used>=lim;
+      if(over) overAny=true;
+      html+='<div class="kid-card'+(over?' over':'')+'"><div class="nm">'+esc(a.name)+'</div>'
+        +'<div class="rem">'+remain+'<small> 分剩余</small></div>'
+        +'<div class="meta">今日已用 '+used+' / 限额 '+lim+' 分</div>'
+        +'<div class="pbar"><i style="width:'+Math.min(100,used/lim*100).toFixed(0)+'%"></i></div></div>';
+    });
+    list.innerHTML=html;
+    // 正在玩
+    var fg = NATIVE? (function(){try{return GameBridge.getForegroundPackage();}catch(e){return '';}})() : '';
+    var playingName='—';
+    if(fg){ for(var i=0;i<cfg.managedApps.length;i++){ if(cfg.managedApps[i].pkg===fg){ playingName='正在玩：'+cfg.managedApps[i].name; break; } } }
+    document.getElementById('kidPlaying').textContent=playingName;
+    // 锁屏遮罩
+    var ov=document.getElementById('lockOverlay');
+    if(overAny){ ov.classList.add('show'); }
+    else { ov.classList.remove('show'); }
+  }
+
+  /* ---------- 模式切换 ---------- */
+  function showParent(){ document.getElementById('parentView').classList.remove('hidden'); document.getElementById('childView').classList.add('hidden'); localStorage.setItem(MODE_KEY,'parent'); refreshPermStates(); refreshBanners(); renderOverview(); renderStats(); }
+  function showChild(){ document.getElementById('parentView').classList.add('hidden'); document.getElementById('childView').classList.remove('hidden'); localStorage.setItem(MODE_KEY,'child'); refreshBanners(); renderKid(); }
+  function requestParent(){
+    if(!cfg.password){ showParent(); return; }
+    var pwd=window.prompt('请输入家长密码：');
+    if(pwd===null) return;
+    if(pwd===cfg.password){ showParent(); }
+    else { alert('密码错误'); }
+  }
+  document.getElementById('toParent').onclick=requestParent;
+
+  /* ---------- Tab ---------- */
   var ptabs=document.querySelectorAll('#parentView .tab');
   ptabs.forEach(function(t){
     t.onclick=function(){
@@ -326,265 +411,42 @@
       t.classList.add('active');
       document.querySelectorAll('#parentView .page').forEach(function(pg){pg.classList.remove('active');});
       document.getElementById('p-'+t.dataset.page).classList.add('active');
+      if(t.dataset.page==='apps') loadApps();
+      if(t.dataset.page==='overview') renderOverview();
       if(t.dataset.page==='stats') renderStats();
+      if(t.dataset.page==='me') refreshPermStates();
     };
   });
 
-  /* ---------- 模式切换 ---------- */
-  var mbtns=document.querySelectorAll('.modetoggle button');
-  mbtns.forEach(function(b){
-    b.onclick=function(){
-      mbtns.forEach(function(x){x.classList.remove('active');});
-      b.classList.add('active');
-      var m=b.dataset.mode;
-      document.getElementById('parentView').classList.toggle('hidden', m!=='parent');
-      document.getElementById('childView').classList.toggle('hidden', m!=='child');
-      if(m==='child') renderChild();
-    };
-  });
+  /* ---------- 我的：按钮 ---------- */
+  document.getElementById('pwSave').onclick=function(){ var v=document.getElementById('pwInput').value; cfg.password=v; saveCfg(); alert('密码已保存'); };
+  document.getElementById('enableAdmin').onclick=function(){ if(NATIVE){ try{GameBridge.requestAdmin();}catch(e){} } };
+  document.getElementById('enableUsage').onclick=function(){ if(NATIVE){ try{GameBridge.openUsageSettings();}catch(e){} } };
+  document.getElementById('enableAcc').onclick=function(){ if(NATIVE){ try{GameBridge.openAccessibilitySettings();}catch(e){} } };
+  document.getElementById('lockBtn').onclick=function(){ if(NATIVE){ try{GameBridge.lockNow();}catch(e){} } };
+  document.getElementById('stopMonitor').onclick=function(){ if(NATIVE){ try{GameBridge.stopMonitor();}catch(e){} } };
+  document.getElementById('resetAll').onclick=function(){ if(confirm('确定清空所有管控应用与限额？')){ cfg.managedApps=[]; saveCfg(); pushManaged(); if(NATIVE){try{GameBridge.stopMonitor();}catch(e){}} renderAppList(); renderOverview(); renderStats(); renderKid(); } };
 
-  /* ---------- 渲染：家长端 ---------- */
-  function renderParent(){
-    var usedMin=Math.floor(state.usedSeconds/60);
-    var limitMin=config.dailyLimit+config.bonus;
-    var remainMin=Math.max(0,limitMin-usedMin);
-    document.getElementById('usedMin').textContent=usedMin;
-    document.getElementById('limitMin').textContent=limitMin;
-    document.getElementById('remainMin').textContent=remainMin;
-    document.getElementById('bonusMin').textContent=config.bonus;
-    document.getElementById('sessCount').textContent=(state.log||[]).filter(function(e){return e.date===todayStr();}).length;
+  /* ---------- 工具 ---------- */
+  function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 
-    var ratio=limitMin>0?Math.min(1,usedMin/limitMin):0;
-    document.getElementById('ringUsed').setAttribute('stroke-dashoffset', (389.56*(1-ratio)).toFixed(2));
-
-    var badge=document.getElementById('statusBadge');
-    if(state.locked){ badge.textContent='已锁机'; badge.className='status-badge badge-lock'; }
-    else if(state.session){ badge.textContent='游戏中'; badge.className='status-badge badge-play'; }
-    else { badge.textContent='空闲'; badge.className='status-badge badge-idle'; }
-
-    document.getElementById('lockBtn').textContent = state.locked ? '已锁机' : '一键锁机';
-    document.getElementById('pwState').textContent = config.password ? '已设置' : '未设置';
-    document.getElementById('meLimit').textContent = limitMin+' 分钟';
-    document.getElementById('meWindow').textContent = config.window;
-    if(nativeOK()){
-      try{ document.getElementById('adminState').textContent = GameBridge.isAdminActive() ? '已启用' : '未启用'; }catch(e){}
-      try{ document.getElementById('usageState').textContent = GameBridge.hasUsagePermission() ? '已授予' : '未授予'; }catch(e){}
-    } else {
-      document.getElementById('adminState').textContent='（网页预览无原生能力）';
-      document.getElementById('usageState').textContent='（网页预览无原生能力）';
-    }
-    renderGames();
-  }
-
-  function renderGames(){
-    var list=document.getElementById('gameList');
-    list.innerHTML='';
-    config.games.forEach(function(g){
-      var row=document.createElement('div'); row.className='game';
-      row.innerHTML=
-        '<div class="icon" style="background:'+g.color+'">'+g.name.charAt(0)+'</div>'+
-        '<div class="info"><div class="gname">'+g.name+'</div>'+
-        '<div class="gmeta">限额 '+g.limit+' 分 / 今日已用 '+Math.floor(gameUsedToday(g.name)/60)+' 分</div></div>'+
-        '<input class="glimit" type="number" min="0" value="'+g.limit+'">'+
-        '<div class="toggle'+(g.enabled?' on':'')+'"><div class="knob"></div></div>';
-      var toggle=row.querySelector('.toggle');
-      toggle.onclick=function(){ g.enabled=!g.enabled; toggle.classList.toggle('on',g.enabled); saveConfig(); renderParent(); };
-      row.querySelector('.glimit').onchange=function(e){ g.limit=parseInt(e.target.value,10)||0; saveConfig(); renderParent(); };
-      list.appendChild(row);
-    });
-  }
-
-  function renderStats(){
-    // 近 7 天
-    var days=[], labels=[], totals=new Array(7).fill(0), max=1;
-    for(var i=6;i>=0;i--){
-      var d=new Date(); d.setDate(d.getDate()-i);
-      var ds=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
-      days.push(ds); labels.push(['日','一','二','三','四','五','六'][d.getDay()]);
-    }
-    (state.log||[]).forEach(function(e){
-      var idx=days.indexOf(e.date);
-      if(idx>=0){ totals[idx]+=e.durationSec/60; }
-    });
-    totals.forEach(function(v){ if(v>max) max=v; });
-    var wc=document.getElementById('weekChart'); wc.innerHTML='';
-    totals.forEach(function(v,i){
-      var col=document.createElement('div'); col.className='bar-col';
-      col.innerHTML='<div class="bar" style="height:'+Math.round(v/max*100)+'%"></div><div class="bar-label">'+labels[i]+'</div>';
-      wc.appendChild(col);
-    });
-
-    // 今日排行
-    var agg={};
-    (state.log||[]).forEach(function(e){
-      if(e.date!==todayStr()) return;
-      agg[e.game]=(agg[e.game]||0)+e.durationSec;
-    });
-    var arr=Object.keys(agg).map(function(k){return {name:k,sec:agg[k]};}).sort(function(a,b){return b.sec-a.sec;});
-    var rl=document.getElementById('rankList'); rl.innerHTML='';
-    if(arr.length===0){ rl.innerHTML='<div class="empty">今日暂无游戏记录，孩子开始游戏后这里会显示真实数据</div>'; return; }
-    arr.forEach(function(r){
-      var line=document.createElement('div'); line.className='row-line';
-      line.innerHTML='<span>'+r.name+'</span><span class="r">'+Math.floor(r.sec/60)+' 分</span>';
-      rl.appendChild(line);
-    });
-  }
-
-  /* ---------- 渲染：孩子端 ---------- */
-  function renderChild(){
-    var stage=document.getElementById('childStage');
-    stage.innerHTML='';
-
-    if(state.locked){
-      stage.innerHTML=
-        '<div class="lock-face">锁</div>'+
-        '<div class="label">设备已锁机<br>今日游戏时长已用完，请输入家长密码解锁</div>'+
-        '<input class="pwinput" id="cPw" placeholder="家长密码" type="password">'+
-        '<button class="btn btn-primary" id="cUnlock">家长解锁</button>';
-      document.getElementById('cUnlock').onclick=function(){
-        var pw=document.getElementById('cPw').value;
-        if(pw!==config.password){ alert('密码错误'); return; }
-        if(nativeOK()){ try{ GameBridge.clearQuota(); GameBridge.stopMonitor(); }catch(e){} }
-        state.locked=false; saveState(); renderChild(); renderParent();
-      };
-      return;
-    }
-
-    if(state.session){
-      var g=getGame(state.session.game);
-      stage.innerHTML=
-        '<div class="play-face">玩</div>'+
-        '<div class="label">正在玩：'+(g?g.name:'游戏')+'</div>'+
-        '<div class="big" id="cd">00:00</div>'+
-        '<div class="label">剩余可玩时间（全天额度）</div>'+
-        '<button class="btn btn-ghost" id="cEnd">结束并保存</button>';
-      document.getElementById('cEnd').onclick=function(){ endSession(); renderChild(); renderParent(); };
-      updateCountdown();
-      return;
-    }
-
-    // 游戏选择
-    stage.innerHTML='<div class="label" style="margin-bottom:4px;">选择要玩的游戏</div>';
-    var grid=document.createElement('div'); grid.className='gamegrid';
-    config.games.filter(function(g){return g.enabled;}).forEach(function(g){
-      var used=gameUsedToday(g.name);
-      var reached=used>=g.limit*60;
-      var card=document.createElement('div');
-      card.className='gcard'+(reached?' disabled':'');
-      card.innerHTML=
-        '<div class="gicon" style="background:'+g.color+'">'+g.name.charAt(0)+'</div>'+
-        '<div class="gname">'+g.name+'</div>'+
-        '<div class="gmeta">'+(reached?'今日已达上限':('今日 '+Math.floor(used/60)+'/'+g.limit+' 分'))+'</div>';
-      if(!reached){
-        card.onclick=function(){ pickGame(g.name); };
-      }
-      grid.appendChild(card);
-    });
-    stage.appendChild(grid);
-  }
-
-  function pickGame(name){
-    var stage=document.getElementById('childStage');
-    stage.innerHTML=
-      '<div class="play-face">玩</div>'+
-      '<div class="label">开始「'+name+'」<br>请输入家长设置的密码</div>'+
-      '<input class="pwinput" id="cPw" placeholder="密码" type="password">'+
-      '<button class="btn btn-primary" id="cStart">开始</button>'+
-      '<button class="btn btn-ghost" id="cBack">返回</button>';
-    document.getElementById('cBack').onclick=function(){ renderChild(); };
-    document.getElementById('cStart').onclick=function(){
-      var pw=document.getElementById('cPw').value;
-      if(pw!==config.password){ alert('密码错误'); return; }
-      if(state.usedSeconds>=effectiveLimitSec()){ alert('今日总时长已用完'); return; }
-      state.session={ game:name, startTs:Date.now(), usedStartSec:state.usedSeconds };
-      if(nativeOK()){
-        try{
-          var remainMs=(effectiveLimitSec()-state.usedSeconds)*1000;
-          GameBridge.setQuotaEndTime(Date.now()+remainMs);
-          GameBridge.setBlockedPackages(blockedPkgsCsv());
-          GameBridge.startMonitor();
-        }catch(e){}
-      }
-      saveState(); renderChild(); renderParent();
-    };
-  }
-
-  function getGame(name){
-    for(var i=0;i<config.games.length;i++){ if(config.games[i].name===name) return config.games[i]; }
-    return null;
-  }
-
-  function endSession(){
-    if(!state.session) return;
-    var now=Date.now();
-    var dur=(now-state.session.startTs)/1000;
-    state.log=state.log||[];
-    state.log.push({ game:state.session.game, date:todayStr(), start:state.session.startTs, end:now, durationSec:Math.floor(dur) });
-    state.usedSeconds += dur;
-    if(nativeOK()){ try{ GameBridge.clearQuota(); GameBridge.stopMonitor(); }catch(e){} }
-    state.session=null;
-    saveState();
-  }
-
-  function updateCountdown(){
-    if(!state.session) return;
-    var remain=effectiveLimitSec()-state.usedSeconds;
-    var el=document.getElementById('cd');
-    if(el) el.textContent=fmt(remain);
-  }
-
-  /* ---------- 计时主循环（真实扣减 + 到时锁机） ---------- */
+  /* ---------- 轮询刷新（真实用量） ---------- */
   setInterval(function(){
-    if(state.session && !state.locked){
-      var now=Date.now();
-      var elapsed=(now-state.session.startTs)/1000;
-      var cur=state.session.usedStartSec+elapsed;
-
-      // 单游戏已达自身限额 → 结束该局（计入记录），但全天未超仍可玩别的
-      var g=getGame(state.session.game);
-      var gameCap=(g?g.limit:0)*60;
-      if(g && (gameUsedToday(g.name)+elapsed) >= gameCap){
-        endSession(); renderParent(); renderChild(); return;
-      }
-      // 全天额度用尽 → 锁机
-      if(cur>=effectiveLimitSec()){
-        if(nativeOK()){ try{ GameBridge.lockNow(); }catch(e){} }
-        endSession();
-        state.usedSeconds=effectiveLimitSec();
-        state.locked=true;
-        saveState(); renderParent(); renderChild();
-        return;
-      }
-      state.usedSeconds=cur;
-      saveState();
-      updateCountdown();
+    if(!document.getElementById('childView').classList.contains('hidden')) renderKid();
+    if(document.getElementById('parentView') && !document.getElementById('parentView').classList.contains('hidden')){
+      var ap=document.querySelector('#parentView .tab.active');
+      if(ap){ var p=ap.dataset.page; if(p==='overview') renderOverview(); if(p==='stats') renderStats(); if(p==='apps') renderAppList(); }
+      refreshPermStates();
     }
-  },1000);
+    refreshBanners();
+  }, 5000);
 
-  /* ---------- 家长操作 ---------- */
-  document.getElementById('saveCfg').onclick=function(){
-    var pw=document.getElementById('setPw').value.trim();
-    var lim=parseInt(document.getElementById('setLimit').value,10);
-    var win=document.getElementById('setWindow').value.trim();
-    if(pw) config.password=pw;
-    if(!isNaN(lim)&&lim>=0) config.dailyLimit=lim;
-    if(win) config.window=win;
-    saveConfig(); renderParent(); alert('设置已保存');
-  };
-  document.getElementById('addTime').onclick=function(){ config.bonus+=15; saveConfig(); renderParent(); };
-  document.getElementById('lockBtn').onclick=function(){
-    if(nativeOK()){ try{ GameBridge.lockNow(); }catch(e){} }
-    state.locked=true; state.session=null; saveState(); renderParent(); renderChild();
-  };
-  document.getElementById('enableAdmin').onclick=function(){ if(nativeOK()){ try{ GameBridge.requestAdmin(); }catch(e){} } };
-  document.getElementById('enableUsage').onclick=function(){ if(nativeOK()){ try{ GameBridge.openUsageSettings(); }catch(e){} } };
-  document.getElementById('resetBtn').onclick=function(){
-    if(nativeOK()){ try{ GameBridge.clearQuota(); GameBridge.stopMonitor(); }catch(e){} }
-    state.usedSeconds=0; state.locked=false; state.session=null; state.log=[]; saveState(); renderParent(); renderChild();
-  };
-
-  /* ---------- 初始化 ---------- */
-  renderParent();
+  /* ---------- 启动 ---------- */
+  var startMode = localStorage.getItem(MODE_KEY)||'child';
+  if(startMode==='parent' && cfg.password){ /* 需密码，先落到孩子端再让家长自行进入 */ showChild(); }
+  else if(startMode==='parent'){ showParent(); }
+  else { showChild(); }
+  refreshBanners();
 })();
 </script>
 </body>

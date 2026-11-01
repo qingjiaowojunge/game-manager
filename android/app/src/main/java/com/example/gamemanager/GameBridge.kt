@@ -2,18 +2,16 @@ package com.example.gamemanager
 
 import android.app.Activity
 import android.app.admin.DevicePolicyManager
-import android.app.usage.UsageStats
-import android.app.usage.UsageStatsManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.os.Process
 import android.provider.Settings
+import android.view.accessibility.AccessibilityManager
 import android.webkit.JavascriptInterface
 import android.widget.Toast
 
 /**
- * 网页(JS) ↔ 原生(Android) 桥接：把系统级能力暴露给 index.html 调用。
+ * 网页(JS) ↔ 原生(Android) 桥接：把系统级真实数据与控制能力暴露给 index.html。
  * index.html 里通过 window.GameBridge.xxx() 调用以下方法。
  */
 class GameBridge(private val activity: Activity) {
@@ -22,6 +20,57 @@ class GameBridge(private val activity: Activity) {
         activity.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
     }
     private val admin: ComponentName by lazy { ComponentName(activity, AdminReceiver::class.java) }
+
+    /* ---------- 真实数据 ---------- */
+
+    /** 真实已装可启动应用清单 JSON: [{name,pkg,sys}] */
+    @JavascriptInterface
+    fun listInstalledApps(): String = UsageUtil.listInstalledApps(activity)
+
+    /** 今天所有应用真实前台时长(ms) JSON: {pkg: ms} */
+    @JavascriptInterface
+    fun getAllUsageToday(): String {
+        val map = UsageUtil.queryUsageMap(activity, UsageUtil.dayStartMs(), System.currentTimeMillis())
+        val o = org.json.JSONObject()
+        for ((k, v) in map) o.put(k, v)
+        return o.toString()
+    }
+
+    /** 某应用今天真实前台时长(ms) */
+    @JavascriptInterface
+    fun getUsageToday(pkg: String): Long {
+        val map = UsageUtil.queryUsageMap(activity, UsageUtil.dayStartMs(), System.currentTimeMillis())
+        return map[pkg] ?: 0L
+    }
+
+    /** 某应用最近 days 天每日真实时长(ms) JSON 数组(旧→新) */
+    @JavascriptInterface
+    fun getUsageSeries(pkg: String, days: Int): String = UsageUtil.usageSeries(activity, pkg, days)
+
+    /** 当前真实前台应用包名（需用量权限） */
+    @JavascriptInterface
+    fun getForegroundPackage(): String {
+        if (!UsageUtil.hasUsagePermission(activity)) return ""
+        val usm = activity.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
+        val end = System.currentTimeMillis()
+        val stats = usm.queryUsageStats(android.app.usage.UsageStatsManager.INTERVAL_DAILY, end - 2000, end)
+        var recent: android.app.usage.UsageStats? = null
+        for (s in stats) {
+            if (recent == null || s.lastTimeUsed > recent.lastTimeUsed) recent = s
+        }
+        return recent?.packageName ?: ""
+    }
+
+    /* ---------- 管控配置 ---------- */
+
+    /** 设置受管控应用与限额: JSON 数组 [{pkg, limit}]，limit 单位分钟；并启动监控 */
+    @JavascriptInterface
+    fun setManagedApps(json: String) {
+        MonitorService.setManagedApps(json)
+        startMonitor()
+    }
+
+    /* ---------- 设备能力 ---------- */
 
     /** 真实锁屏（需已启用设备管理员） */
     @JavascriptInterface
@@ -39,7 +88,6 @@ class GameBridge(private val activity: Activity) {
     @JavascriptInterface
     fun isAdminActive(): Boolean = dpm.isAdminActive(admin)
 
-    /** 跳转到系统"激活设备管理员"页面 */
     @JavascriptInterface
     fun requestAdmin() {
         val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
@@ -49,41 +97,29 @@ class GameBridge(private val activity: Activity) {
     }
 
     @JavascriptInterface
-    fun hasUsagePermission(): Boolean {
-        val appOps = activity.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
-        val mode = appOps.checkOpNoThrow("android:get_usage_stats", Process.myUid(), activity.packageName)
-        return mode == android.app.AppOpsManager.MODE_ALLOWED
-    }
+    fun hasUsagePermission(): Boolean = UsageUtil.hasUsagePermission(activity)
 
     @JavascriptInterface
     fun openUsageSettings() {
         activity.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
     }
 
-    /** 真实查询当前前台应用包名（需用量统计权限） */
     @JavascriptInterface
-    fun getForegroundPackage(): String {
-        if (!hasUsagePermission()) return ""
-        val usm = activity.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val end = System.currentTimeMillis()
-        val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, end - 2000, end)
-        var recent: UsageStats? = null
-        for (s in stats) {
-            if (recent == null || s.lastTimeUsed > recent.lastTimeUsed) recent = s
-        }
-        return recent?.packageName ?: ""
+    fun openAccessibilitySettings() {
+        activity.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
     }
 
-    /** 设置本局额度截止时间（毫秒时间戳），到点由 MonitorService 真实锁屏 */
     @JavascriptInterface
-    fun setQuotaEndTime(endTimeMs: Long) { MonitorService.setQuotaEnd(endTimeMs) }
+    fun isAccessibilityOn(): Boolean {
+        val am = activity.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+        val list = am.getEnabledAccessibilityServiceList(AccessibilityManager.FEEDBACK_ALL_MASK)
+        for (i in list) {
+            if (i.resolveInfo.serviceInfo.packageName == activity.packageName) return true
+        }
+        return false
+    }
 
-    /** 设置受管控游戏包名列表（逗号分隔），超时后无障碍服务会将其退回桌面 */
-    @JavascriptInterface
-    fun setBlockedPackages(csv: String) { MonitorService.setBlocked(csv) }
-
-    @JavascriptInterface
-    fun clearQuota() { MonitorService.clearQuota() }
+    /* ---------- 监控服务控制 ---------- */
 
     @JavascriptInterface
     fun startMonitor() {
