@@ -55,8 +55,13 @@ git branch -M main
 git remote add origin https://github.com/<你的用户名>/<仓库名>.git
 git push -u origin main
 ```
-等 Actions 跑完（约 3–5 分钟），进仓库 **Releases** 下载 `GameManager.apk`；或扫 Release 里的 `qr.png` 直接装。
-之后每次 `git push` 都会重新出包，下载链接固定为 `releases/latest/download/GameManager.apk`。
+等 Actions 跑完（约 3–5 分钟）。出包后有两种装法：
+
+- **手机直接装（推荐，无需 GitHub 账号）**：打开 `https://<你的用户名>.github.io/<仓库名>/`（构建时自动部署到 GitHub Pages），或扫 Release 里的 `qr.png`，页面直接下载 `GameManager.apk`。
+  - 需在仓库 **Settings → Pages → Source** 选择 **GitHub Actions**（`push.bat` 会用 `gh` 自动帮你开；没开成则手动设一次）。
+- **Release 下载（需登录 GitHub）**：进仓库 **Releases** 点 `GameManager.apk`。
+
+之后每次 `git push` 都会重新出包并更新 Pages，手机下载页地址不变。
 
 ## 必须授权（否则读不到真实数据）
 | 权限 | 作用 | 是否必需 |
