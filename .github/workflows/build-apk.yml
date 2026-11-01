@@ -4,6 +4,8 @@ name: 构建并发布 APK
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - '**.md'
   workflow_dispatch:
 
 permissions:

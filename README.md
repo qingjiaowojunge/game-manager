@@ -3,6 +3,15 @@
 用 **HTML / JS / CSS** 写应用，打包成 **Android APK** 装到手机上运行。
 应用本体就是 `index.html`（内联了全部 CSS/JS），安卓端只有一个极薄的 WebView 壳把它装进 APK 在手机里跑。
 
+## 现在就装（已跑通，实测可下载）
+
+- **手机下载页（推荐，免 GitHub 账号）**：<https://qingjiaowojunge.github.io/game-manager/>
+- **APK 直链**：<https://qingjiaowojunge.github.io/game-manager/GameManager.apk>
+- **仓库**：<https://github.com/qingjiaowojunge/game-manager>
+- **Release 归档（需登录）**：<https://github.com/qingjiaowojunge/game-manager/releases>
+
+已核验（最近一次构建 v1.0.5）：Actions `build` ✅ `pages` ✅；APK 1.97 MB；APK 内 `assets/index.html`、`AndroidManifest.xml`、3 个 dex 齐全，`MainActivity / GameBridge / UsageUtil / MonitorService / AppMonitorAccessibilityService / AdminReceiver` 六个类均已打进 dex，`QUERY_ALL_PACKAGES / PACKAGE_USAGE_STATS / REQUEST_IGNORE_BATTERY_OPTIMIZATIONS / POST_NOTIFICATIONS / FGS_SPECIAL_USE` 权限与 `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` 均已写入 manifest。
+
 **这版彻底去除了假数据**——所有数据都来自手机真实系统：
 - 应用清单来自 `PackageManager`（手机真实已装应用，家长从中勾选要管控的）
 - 使用时长来自 `UsageStatsManager`（每个应用真实前台耗时，不是应用自己数的）
@@ -23,10 +32,10 @@
 ├── index.html                 # 应用本体（HTML/JS/CSS），真实数据驱动，你主要改这里
 ├── android/                   # 极薄 WebView 壳 + 原生桥接层
 │   ├── app/src/main/java/.../
-│   │   ├── MainActivity.java          # WebView 加载 assets/index.html
+│   │   ├── MainActivity.kt            # WebView 加载 assets/index.html（唯一入口）
 │   │   ├── GameBridge.kt              # @JavascriptInterface 暴露真实数据/控制
 │   │   ├── UsageUtil.kt               # 已装应用 + 真实用量(UsageStats) 共享工具
-│   │   ├── MonitorService.kt          # 前台服务：读真实用量，超额锁屏
+│   │   ├── MonitorService.kt          # 前台服务：读真实用量，超额锁屏（限额落盘，重启不丢）
 │   │   ├── AppMonitorAccessibilityService.kt  # 超限应用退回桌面
 │   │   └── AdminReceiver.kt           # 设备管理员
 │   ├── app/src/main/res/...   # 图标、主题、无障碍描述
@@ -88,3 +97,11 @@ git push -u origin main
 - 真锁屏依赖设备管理员；未授权时仅显示应用内锁屏遮罩，孩子仍可手动退出遮罩（弱管控）。
 - 不同厂商 ROM 对设备管理员 / 无障碍 / 后台保活有额外限制，必要时需在系统"电池/自启动/应用管理"里加白。
 - 本应用面向家长自主管理自用或子女设备，请遵守当地法律法规与未成年人保护相关规定。
+
+## 出包踩坑记录（改代码前先看，避免重犯）
+| 曾经报错 | 真实原因 | 正确做法 |
+|---|---|---|
+| `sdkmanager tools` 退出码 1 | `android-actions/setup-android@v3` 与 runner 自带 cmdline-tools 冲突 | 用 runner 自带 `/usr/local/lib/android/sdk` + 显式 `sdkmanager` 装 platform/build-tools，并写 `android/local.properties` |
+| `Unresolved reference: FEEDBACK_ALL_MASK` | 常量属于 `AccessibilityServiceInfo`，不是 `AccessibilityManager` | `AccessibilityServiceInfo.FEEDBACK_ALL_MASK` |
+| `'onEnabled' overrides nothing` | Java 平台类型参数不能用 `Context?` / `Intent?` 重写 | 用非空 `Context` / `Intent`，或直接不写这两个重写 |
+| `Type ...MainActivity is defined multiple times`（dex 阶段） | 同名 `.java` 与 `.kt` 同时存在 | 一个类只保留一份源码 |
