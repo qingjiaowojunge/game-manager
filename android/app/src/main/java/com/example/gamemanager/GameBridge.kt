@@ -5,6 +5,8 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.PowerManager
 import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import android.webkit.JavascriptInterface
@@ -117,6 +119,41 @@ class GameBridge(private val activity: Activity) {
             if (i.resolveInfo.serviceInfo.packageName == activity.packageName) return true
         }
         return false
+    }
+
+    /** 是否已加入电池优化白名单（后台保活） */
+    @JavascriptInterface
+    fun isIgnoringBatteryOptimizations(): Boolean {
+        val pm = activity.getSystemService(Context.POWER_SERVICE) as PowerManager
+        return pm.isIgnoringBatteryOptimizations(activity.packageName)
+    }
+
+    /** 请求加入电池优化白名单（国产 ROM 防杀后台） */
+    @JavascriptInterface
+    fun requestIgnoreBatteryOptimizations() {
+        val pm = activity.getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (pm.isIgnoringBatteryOptimizations(activity.packageName)) {
+            activity.runOnUiThread { Toast.makeText(activity, "已在电池优化白名单", Toast.LENGTH_SHORT).show() }
+            return
+        }
+        try {
+            val i = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+            i.data = Uri.parse("package:" + activity.packageName)
+            activity.startActivity(i)
+        } catch (e: Exception) {
+            // 部分 ROM 不支持直接弹窗，退回应用详情页让用户手动设
+            openAppDetailsSettings()
+        }
+    }
+
+    /** 打开本应用系统详情页（设置自启动/权限） */
+    @JavascriptInterface
+    fun openAppDetailsSettings() {
+        try {
+            val i = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+            i.data = Uri.parse("package:" + activity.packageName)
+            activity.startActivity(i)
+        } catch (e: Exception) {}
     }
 
     /* ---------- 监控服务控制 ---------- */

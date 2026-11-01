@@ -37,16 +37,21 @@ object UsageUtil {
         return mode == AppOpsManager.MODE_ALLOWED
     }
 
-    /** 查询 [startMs, endMs) 内各应用真实前台时长（毫秒），按包名聚合 */
+    /**
+     * 查询 [startMs, endMs) 内各应用真实前台时长（毫秒）。
+     * 用 queryAndAggregateUsageStats（系统已按包名聚合），避免 queryUsageStats 多桶重复累加导致时长翻倍。
+     */
     fun queryUsageMap(ctx: Context, startMs: Long, endMs: Long): Map<String, Long> {
         val map = mutableMapOf<String, Long>()
         if (!hasUsagePermission(ctx)) return map
         val usm = ctx.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val stats: List<UsageStats> = usm.queryUsageStats(
-            UsageStatsManager.INTERVAL_DAILY, startMs, endMs
-        )
-        for (s in stats) {
-            map[s.packageName] = (map[s.packageName] ?: 0L) + s.totalTimeInForeground
+        val agg: Map<String, UsageStats> = try {
+            usm.queryAndAggregateUsageStats(startMs, endMs)
+        } catch (e: Exception) {
+            return map
+        }
+        for ((pkg, s) in agg) {
+            map[pkg] = s.totalTimeInForeground
         }
         return map
     }

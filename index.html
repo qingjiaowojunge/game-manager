@@ -223,9 +223,11 @@
           <div class="perm-row"><span>设备管理员（真锁屏）</span><span id="adminState" class="perm-state no">未启用</span></div>
           <div class="perm-row"><span>使用情况访问（真实时长）</span><span id="usageState" class="perm-state no">未授予</span></div>
           <div class="perm-row"><span>无障碍（退回桌面拦截）</span><span id="accState" class="perm-state no">未开启</span></div>
+          <div class="perm-row"><span>后台运行（电池优化白名单）</span><span id="battState" class="perm-state no">未加入</span></div>
           <button class="btn ghost sm" id="enableAdmin" style="margin-top:10px;">启用设备管理员</button>
           <button class="btn ghost sm" id="enableUsage" style="margin-top:8px;">授予用量权限</button>
           <button class="btn ghost sm" id="enableAcc" style="margin-top:8px;">开启无障碍</button>
+          <button class="btn ghost sm" id="enableBatt" style="margin-top:8px;">加入电池优化白名单</button>
         </div>
         <div class="card">
           <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>重置</h3>
@@ -337,6 +339,9 @@
     a.textContent=isAdmin()?'已启用':'未启用'; a.className='perm-state '+(isAdmin()?'ok':'no');
     var u=document.getElementById('usageState'); u.textContent=hasUsage()?'已授予':'未授予'; u.className='perm-state '+(hasUsage()?'ok':'no');
     var c=document.getElementById('accState'); c.textContent=isAcc()?'已开启':'未开启'; c.className='perm-state '+(isAcc()?'ok':'no');
+    var b=document.getElementById('battState');
+    if(b){ var ok=false; if(NATIVE){ try{ ok=GameBridge.isIgnoringBatteryOptimizations(); }catch(e){} }
+      b.textContent=ok?'已加入':'未加入'; b.className='perm-state '+(ok?'ok':'no'); }
   }
 
   /* ---------- 真实用量 ---------- */
@@ -534,6 +539,7 @@
   document.getElementById('enableAdmin').onclick=function(){ if(NATIVE){ try{GameBridge.requestAdmin();}catch(e){} } };
   document.getElementById('enableUsage').onclick=function(){ if(NATIVE){ try{GameBridge.openUsageSettings();}catch(e){} } };
   document.getElementById('enableAcc').onclick=function(){ if(NATIVE){ try{GameBridge.openAccessibilitySettings();}catch(e){} } };
+  document.getElementById('enableBatt').onclick=function(){ if(NATIVE){ try{GameBridge.requestIgnoreBatteryOptimizations();}catch(e){} } };
   document.getElementById('lockBtn').onclick=function(){ if(NATIVE){ try{GameBridge.lockNow();}catch(e){} } };
   document.getElementById('stopMonitor').onclick=function(){ if(NATIVE){ try{GameBridge.stopMonitor();}catch(e){} } };
   document.getElementById('resetAll').onclick=function(){ if(confirm('确定清空所有管控应用与限额？')){ cfg.managedApps=[]; saveCfg(); pushManaged(); if(NATIVE){try{GameBridge.stopMonitor();}catch(e){}} renderAppList(); renderOverview(); renderStats(); renderKid(); } };
