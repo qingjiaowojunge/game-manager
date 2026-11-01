@@ -68,6 +68,9 @@
 
   /* 应用列表 */
   .search{width:100%;padding:12px 14px 12px 40px;border:1px solid var(--border);border-radius:12px;font-size:14px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4-4'/%3E%3C/svg%3E") no-repeat 13px center;background-size:18px;}
+  .filterrow{display:flex;justify-content:flex-end;margin:10px 0 2px;}
+  .chk{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);cursor:pointer;}
+  .chk input{width:16px;height:16px;accent-color:var(--primary);}
   .approw{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);}
   .approw:last-child{border-bottom:none;}
   .ai{width:42px;height:42px;border-radius:12px;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;flex:none;}
@@ -191,8 +194,9 @@
       <div class="page" id="p-apps">
         <div class="card">
           <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>选择要管控的应用</h3>
-          <div class="note">以下为手机<b>真实已装应用</b>。开启开关即纳入管控并设置每日分钟数。</div>
+          <div class="note">以下为手机<b>真实已装应用</b>。搜索找到要管控的 App，开启开关即纳入管控并设置每日分钟数。</div>
           <input class="search" id="appSearch" placeholder="搜索应用名…">
+          <div class="filterrow"><label class="chk"><input type="checkbox" id="sysToggle"> 显示系统应用</label></div>
           <div id="appList"></div>
           <div id="appEmpty" class="empty hidden">
             <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
@@ -368,6 +372,7 @@
 
   /* ---------- 应用列表（真实已装 / 预览示例） ---------- */
   var allApps=[];
+  var showSystem=false;
   function loadApps(){
     var box=document.getElementById('appList'), empty=document.getElementById('appEmpty');
     if(isPreview){
@@ -394,6 +399,7 @@
     var map=getAllUsage();
     var html='';
     allApps.forEach(function(a,idx){
+      if(!showSystem && a.sys) return;
       if(q && a.name.toLowerCase().indexOf(q)<0 && a.pkg.toLowerCase().indexOf(q)<0) return;
       var mi=managedIndex(a.pkg), on=mi>=0;
       var limit= on? cfg.managedApps[mi].limit : 30;
@@ -426,6 +432,7 @@
     renderOverview(); renderStats();
   };
   document.getElementById('appSearch').addEventListener('input', renderAppList);
+  document.getElementById('sysToggle').addEventListener('change', function(){ showSystem=this.checked; renderAppList(); });
 
   /* ---------- 统计 ---------- */
   function renderStats(){
