@@ -1,5 +1,6 @@
 package com.example.gamemanager
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.Activity
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
@@ -114,7 +115,7 @@ class GameBridge(private val activity: Activity) {
     @JavascriptInterface
     fun isAccessibilityOn(): Boolean {
         val am = activity.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-        val list = am.getEnabledAccessibilityServiceList(AccessibilityManager.FEEDBACK_ALL_MASK)
+        val list = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
         for (i in list) {
             if (i.resolveInfo.serviceInfo.packageName == activity.packageName) return true
         }
