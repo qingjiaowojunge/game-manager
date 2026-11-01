@@ -558,6 +558,16 @@
     refreshBanners();
   }, 5000);
 
+  /* ---------- 原生回调：App 从后台/设置页回到前台时刷新真实数据 ---------- */
+  window.__onNativeResume = function(){
+    try{
+      refreshBanners(); refreshPermStates();
+      if(mode==='child'){ renderKid(); }
+      else { renderOverview(); renderStats(); }
+      pushManaged();
+    }catch(e){}
+  };
+
   /* ---------- 启动（默认进家长端，便于配置；任何异常都不影响界面显示） ---------- */
   try{
     var startMode = lsGet(MODE_KEY)||'parent';

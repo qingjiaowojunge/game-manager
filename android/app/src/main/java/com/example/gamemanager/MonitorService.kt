@@ -9,6 +9,7 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -19,15 +20,19 @@ import org.json.JSONArray
 /**
  * 前台服务：持续读取「受管控应用」的【真实】前台时长（UsageStatsManager），
  * 任一应用今日真实时长达到其限额即调用 DevicePolicyManager.lockNow() 真锁屏。
- * 受管控清单由 GameBridge.setManagedApps() 写入。
+ * 受管控清单由 GameBridge.setManagedApps() 写入，并落盘到 SharedPreferences
+ * （进程被系统回收后重启服务仍保留限额，不会静默失效）。
  */
 class MonitorService : Service() {
 
     companion object {
+        private const val PREF = "gm_monitor"
+        private const val KEY = "managed_apps"
+
         /** pkg -> 每日限额(分钟) */
         @Volatile var managedApps: MutableMap<String, Int> = HashMap()
 
-        fun setManagedApps(json: String) {
+        private fun parse(json: String): HashMap<String, Int> {
             val map = HashMap<String, Int>()
             try {
                 val arr = JSONArray(json)
@@ -38,7 +43,24 @@ class MonitorService : Service() {
                     if (pkg.isNotEmpty() && limit > 0) map[pkg] = limit
                 }
             } catch (e: Exception) { /* 忽略解析错误 */ }
-            managedApps = map
+            return map
+        }
+
+        fun setManagedApps(ctx: Context, json: String) {
+            managedApps = parse(json)
+            try {
+                ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE)
+                    .edit().putString(KEY, json).apply()
+            } catch (e: Exception) { }
+        }
+
+        fun restore(ctx: Context) {
+            if (managedApps.isNotEmpty()) return
+            try {
+                val json = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE)
+                    .getString(KEY, "") ?: ""
+                if (json.isNotEmpty()) managedApps = parse(json)
+            } catch (e: Exception) { }
         }
     }
 
@@ -48,7 +70,12 @@ class MonitorService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        startForeground(1, buildNotification())
+        restore(this)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(1, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(1, buildNotification())
+        }
         loop()
     }
 

@@ -27,6 +27,7 @@ class AppMonitorAccessibilityService : AccessibilityService() {
     }
 
     override fun onServiceConnected() {
+        MonitorService.restore(this)   // 无障碍服务可能先于主界面/前台服务被系统拉起
         val info = AccessibilityServiceInfo()
         info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC

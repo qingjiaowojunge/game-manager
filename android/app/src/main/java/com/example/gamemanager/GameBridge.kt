@@ -66,10 +66,10 @@ class GameBridge(private val activity: Activity) {
 
     /* ---------- 管控配置 ---------- */
 
-    /** 设置受管控应用与限额: JSON 数组 [{pkg, limit}]，limit 单位分钟；并启动监控 */
+    /** 设置受管控应用与限额: JSON 数组 [{pkg, limit}]，limit 单位分钟；落盘并启动监控 */
     @JavascriptInterface
     fun setManagedApps(json: String) {
-        MonitorService.setManagedApps(json)
+        MonitorService.setManagedApps(activity, json)
         startMonitor()
     }
 
