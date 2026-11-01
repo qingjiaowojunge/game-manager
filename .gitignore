@@ -1,0 +1,21 @@
+# ===== Android / Gradle 构建产物（不要提交） =====
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+*.iml
+.idea/
+*.keystore
+captures/
+# 注意：index.html 会由 CI 拷贝进 android/app/src/main/assets/，本地无需提交该副本
+android/app/src/main/assets/index.html
+
+# ===== 操作系统 / 编辑器 =====
+.DS_Store
+Thumbs.db
+*.swp
+
+# ===== 临时输出（CI 生成的 APK / 二维码，发布在 Release 里） =====
+output/
+*.apk
+*.png.bak

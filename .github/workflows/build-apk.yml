@@ -1,0 +1,76 @@
+name: 构建并发布 APK
+
+# 触发：推送到 main 自动构建 APK 并发布 Release；也可手动触发
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: 安装 Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 安装 SDK 组件
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: 安装 Gradle 8.2
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.2'
+
+      - name: 把网页应用打包进 APK
+        run: |
+          mkdir -p android/app/src/main/assets
+          cp index.html android/app/src/main/assets/index.html
+
+      - name: 编译 Debug APK
+        run: cd android && gradle assembleDebug --no-daemon --stacktrace
+
+      - name: 重命名 APK
+        run: |
+          mkdir -p output
+          cp android/app/build/outputs/apk/debug/app-debug.apk "output/GameManager.apk"
+          ls -la output/
+
+      - name: 生成二维码
+        run: |
+          pip install qrcode[pil] --quiet
+          python -c "import qrcode; qrcode.make('https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/releases/latest/download/GameManager.apk').save('output/qr.png')"
+
+      - name: 发布 Release 并上传 APK + 二维码
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: 游戏管理软件 v1.0.${{ github.run_number }}
+          body: |
+            自动构建 #${{ github.run_number }}
+
+            ## 安装步骤
+            1. 手机下载 GameManager.apk（点下方链接或扫描二维码）
+            2. 文件管理器找到下载的 APK
+            3. 开启「设置 → 安全 → 允许未知来源」
+            4. 点击 APK 安装
+
+            ## 扫码下载
+            用手机扫描附件中的二维码即可直接下载 APK
+          files: |
+            output/GameManager.apk
+            output/qr.png
+          prerelease: false

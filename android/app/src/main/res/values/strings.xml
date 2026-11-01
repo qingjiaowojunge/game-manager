@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">游戏管理软件</string>
+    <string name="accessibility_desc">游戏管理软件需要在检测到受管控游戏且已超时，将其退回桌面并锁屏。</string>
+</resources>
