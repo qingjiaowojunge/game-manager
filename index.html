@@ -135,6 +135,22 @@
   .bottomnav .tab svg{width:23px;height:23px;}
   .bottomnav .tab.active{color:var(--primary);font-weight:700;}
 
+  /* 管控状态条 */
+  .guardbar{display:flex;align-items:center;gap:9px;margin:10px 14px 0;padding:11px 14px;border-radius:12px;
+    background:var(--success-bg);color:#166534;font-size:13px;font-weight:600;}
+  .guardbar.paused{background:var(--warning-bg);color:#92400e;}
+  .guardbar.off{background:#f1f5f9;color:var(--muted);}
+  .guardbar .dot{width:8px;height:8px;border-radius:50%;background:currentColor;flex:none;}
+  .guardbar .gtxt{flex:1;min-width:0;}
+  .guardbar .gbtn{border:1.5px solid currentColor;background:transparent;color:inherit;font-size:12.5px;
+    font-weight:700;padding:5px 12px;border-radius:20px;cursor:pointer;white-space:nowrap;}
+
+  /* 策略选择 */
+  .optrow{display:flex;align-items:flex-start;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);font-size:14px;cursor:pointer;}
+  .optrow:last-child{border-bottom:none;}
+  .optrow input{margin-top:3px;accent-color:var(--primary);flex:none;}
+  .optrow .od{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.5;}
+
   /* 锁屏遮罩 */
   #lockOverlay{position:fixed;inset:0;background:rgba(15,23,42,.97);color:#fff;display:none;flex-direction:column;align-items:center;justify-content:center;z-index:60;padding:28px;text-align:center;}
   #lockOverlay.show{display:flex;}
@@ -162,6 +178,13 @@
 
   <div id="permBanner" class="banner warn hidden"></div>
   <div id="prevBanner" class="banner prev hidden"></div>
+
+  <!-- 管控状态条：家长一眼看到"现在到底管不管" -->
+  <div id="guardBar" class="guardbar hidden">
+    <span class="dot"></span>
+    <span class="gtxt" id="guardText">管控中</span>
+    <button class="gbtn" id="guardToggle" type="button">暂停</button>
+  </div>
 
   <!-- ============ 家长端 ============ -->
   <div id="parentView">
@@ -220,19 +243,34 @@
         </div>
         <div class="card">
           <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v5c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6z"/></svg>系统能力授权</h3>
-          <div class="perm-row"><span>设备管理员（真锁屏）</span><span id="adminState" class="perm-state no">未启用</span></div>
+          <div class="perm-row"><span>显示在其他应用上层（拦截页必需）</span><span id="ovlState" class="perm-state no">未授予</span></div>
           <div class="perm-row"><span>使用情况访问（真实时长）</span><span id="usageState" class="perm-state no">未授予</span></div>
-          <div class="perm-row"><span>无障碍（退回桌面拦截）</span><span id="accState" class="perm-state no">未开启</span></div>
+          <div class="perm-row"><span>无障碍（退到桌面，可选）</span><span id="accState" class="perm-state no">未开启</span></div>
+          <div class="perm-row"><span>设备管理员（锁屏，可选）</span><span id="adminState" class="perm-state no">未启用</span></div>
           <div class="perm-row"><span>后台运行（电池优化白名单）</span><span id="battState" class="perm-state no">未加入</span></div>
-          <button class="btn ghost sm" id="enableAdmin" style="margin-top:10px;">启用设备管理员</button>
+          <button class="btn ghost sm" id="enableOverlay" style="margin-top:10px;">授予悬浮窗权限</button>
           <button class="btn ghost sm" id="enableUsage" style="margin-top:8px;">授予用量权限</button>
           <button class="btn ghost sm" id="enableAcc" style="margin-top:8px;">开启无障碍</button>
+          <button class="btn ghost sm" id="enableAdmin" style="margin-top:8px;">启用设备管理员</button>
           <button class="btn ghost sm" id="enableBatt" style="margin-top:8px;">加入电池优化白名单</button>
+          <div class="note">只有「悬浮窗」和「用量访问」是必做的；无障碍和设备管理员只在你选了对应处理方式时才需要。</div>
+        </div>
+
+        <div class="card">
+          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>超额后怎么处理</h3>
+          <label class="optrow"><input type="radio" name="policy" value="block" checked>
+            <span><b>只弹全屏拦截页</b><div class="od">孩子退不出去，但手机不锁死。不需要无障碍和设备管理员，最稳。</div></span></label>
+          <label class="optrow"><input type="radio" name="policy" value="block_home">
+            <span><b>拦截页 + 退回桌面</b><div class="od">额外把游戏压到后台。需要开启无障碍服务。</div></span></label>
+          <label class="optrow"><input type="radio" name="policy" value="lock">
+            <span><b>拦截页 + 直接锁屏</b><div class="od">最强制，会锁住整台手机。需要设备管理员，且会打断你自己的操作，慎用。</div></span></label>
         </div>
         <div class="card">
-          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>重置</h3>
-          <button class="btn ghost sm" id="stopMonitor">停止监控</button>
-          <button class="btn ghost sm red" id="resetAll" style="margin-top:8px;">清空所有管控配置</button>
+          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>暂停 / 重置</h3>
+          <button class="btn ghost sm" id="pause30" style="width:100%;">暂停管控 30 分钟</button>
+          <button class="btn ghost sm" id="resumeNow" style="margin-top:8px;width:100%;">立即恢复管控</button>
+          <button class="btn ghost sm red" id="resetAll" style="margin-top:8px;width:100%;">清空所有管控配置</button>
+          <div class="note">暂停期间完全不拦截，可以用来调试或让孩子自由使用。到期自动恢复。</div>
         </div>
         <div class="note">v2 · 数据全部来自手机真实用量（UsageStatsManager）与已装应用（PackageManager）。</div>
       </div>
@@ -267,11 +305,12 @@
     </div>
   </div>
 
-  <!-- 锁屏遮罩 -->
+  <!-- 超限提示层（必须带出口，禁止做成关不掉的黑屏） -->
   <div id="lockOverlay">
     <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-    <div class="big">今日时间已用完</div>
+    <div class="big" id="lockTitle">今日时间已用完</div>
     <div class="sub" id="lockSub">该应用已达到每日限额。<br>请让家长在「家长入口」中为该应用加时。</div>
+    <button class="btn ghost" id="lockDismiss" style="margin-top:22px;max-width:260px;background:transparent;color:#fff;border-color:rgba(255,255,255,.5);">返回</button>
   </div>
 </div>
 
@@ -308,8 +347,12 @@
   function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
   function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
   function loadCfg(){
-    try{ var c=JSON.parse(lsGet(CFG_KEY)); if(c) return c; }catch(e){}
-    return { password:'1234', managedApps:[] };
+    var c=null;
+    try{ c=JSON.parse(lsGet(CFG_KEY)); }catch(e){}
+    if(!c) c = { password:'1234', managedApps:[] };
+    if(!c.managedApps) c.managedApps=[];
+    if(!c.policy) c.policy='block';          // 默认：只弹拦截页，不锁屏
+    return c;
   }
   function saveCfg(){ lsSet(CFG_KEY, JSON.stringify(cfg)); }
   var cfg = loadCfg();
@@ -319,6 +362,59 @@
   function hasUsage(){ if(!NATIVE) return false; try{ return GameBridge.hasUsagePermission(); }catch(e){ return false; } }
   function isAdmin(){ if(!NATIVE) return false; try{ return GameBridge.isAdminActive(); }catch(e){ return false; } }
   function isAcc(){ if(!NATIVE) return false; try{ return GameBridge.isAccessibilityOn(); }catch(e){ return false; } }
+  function hasOverlay(){ if(!NATIVE) return false; try{ return GameBridge.hasOverlayPermission(); }catch(e){ return false; } }
+
+  /* ---------- 管控状态（一律读原生真值，不在网页里猜） ---------- */
+  var guardState={paused:false,pauseRemain:0,policy:'block',fg:''};
+  var PREVIEW_BONUS={};
+  function readGuard(){
+    if(!NATIVE) return guardState;
+    try{ guardState=JSON.parse(GameBridge.getGuardState()); }catch(e){}
+    return guardState;
+  }
+  function bonusMin(pkg){
+    if(!NATIVE) return PREVIEW_BONUS[pkg]||0;
+    try{ return GameBridge.getBonus(pkg); }catch(e){ return 0; }
+  }
+  function effLimit(a){ return a.limit + bonusMin(a.pkg); }
+
+  function doPause(m){
+    if(!NATIVE){ toast('网页预览不支持真拦截'); return; }
+    try{ GameBridge.pauseGuard(m); }catch(e){}
+    refreshGuardBar(); refreshBanners();
+  }
+  function doResume(){
+    if(!NATIVE) return;
+    try{ GameBridge.resumeGuard(); }catch(e){}
+    refreshGuardBar(); refreshBanners();
+  }
+  function toast(msg){ if(NATIVE){ try{ GameBridge.toast(msg); return; }catch(e){} } }
+
+  function refreshGuardBar(){
+    var bar=document.getElementById('guardBar'); if(!bar) return;
+    if(isPreview){ bar.classList.add('hidden'); return; }
+    var g=readGuard();
+    var t=document.getElementById('guardText'), btn=document.getElementById('guardToggle');
+    bar.classList.remove('hidden');
+    if(cfg.managedApps.length===0){
+      bar.className='guardbar off';
+      t.textContent='还没有选择要管控的应用，当前不拦截任何东西';
+      btn.textContent='去选择';
+      btn.onclick=function(){ var tab=document.querySelector('#parentView .tab[data-page="apps"]'); if(tab) tab.click(); };
+      return;
+    }
+    if(g.paused){
+      bar.className='guardbar paused';
+      t.textContent='管控已暂停'+(g.pauseRemain>0?'，还剩 '+g.pauseRemain+' 分钟':'（无限期）');
+      btn.textContent='恢复';
+      btn.onclick=doResume;
+    } else {
+      bar.className='guardbar';
+      t.textContent='正在管控 '+cfg.managedApps.length+' 个应用';
+      btn.textContent='暂停 30 分钟';
+      btn.onclick=function(){ doPause(30); };
+    }
+  }
 
   /* ---------- 时钟 ---------- */
   function tickClock(){}
@@ -329,16 +425,29 @@
     var pb=document.getElementById('permBanner'), pv=document.getElementById('prevBanner');
     if(isPreview){ pv.classList.remove('hidden'); pv.textContent='网页预览（示例数据）：界面与交互均为真实结构，安装 APK 后自动替换为手机真实已装应用与真实使用时长。'; pb.classList.add('hidden'); return; }
     pv.classList.add('hidden');
-    if(!hasUsage()){ pb.classList.remove('hidden'); pb.innerHTML='未授予「使用情况访问」权限，无法读取真实使用时长。<button class="btn ghost sm" style="margin-left:8px;" onclick="GameBridge.openUsageSettings()">去授予</button>'; }
-    else { pb.classList.add('hidden'); }
+    if(!hasUsage()){
+      pb.classList.remove('hidden');
+      pb.innerHTML='未授予「使用情况访问」权限，读不到真实使用时长，管控不会生效。<button class="btn ghost sm" style="margin-left:8px;" onclick="GameBridge.openUsageSettings()">去授予</button>';
+      return;
+    }
+    if(cfg.managedApps.length>0 && !hasOverlay()){
+      pb.classList.remove('hidden');
+      pb.innerHTML='未授予「显示在其他应用上层」权限，超额时弹不出拦截页（只会发一条通知）。<button class="btn ghost sm" style="margin-left:8px;" onclick="GameBridge.requestOverlayPermission()">去授予</button>';
+      return;
+    }
+    pb.classList.add('hidden');
   }
 
   /* ---------- 权限状态 ---------- */
   function refreshPermStates(){
-    var a=document.getElementById('adminState'); if(!a) return;
-    a.textContent=isAdmin()?'已启用':'未启用'; a.className='perm-state '+(isAdmin()?'ok':'no');
-    var u=document.getElementById('usageState'); u.textContent=hasUsage()?'已授予':'未授予'; u.className='perm-state '+(hasUsage()?'ok':'no');
-    var c=document.getElementById('accState'); c.textContent=isAcc()?'已开启':'未开启'; c.className='perm-state '+(isAcc()?'ok':'no');
+    var o=document.getElementById('ovlState');
+    if(o){ o.textContent=hasOverlay()?'已授予':'未授予'; o.className='perm-state '+(hasOverlay()?'ok':'no'); }
+    var u=document.getElementById('usageState');
+    if(u){ u.textContent=hasUsage()?'已授予':'未授予'; u.className='perm-state '+(hasUsage()?'ok':'no'); }
+    var c=document.getElementById('accState');
+    if(c){ c.textContent=isAcc()?'已开启':'未开启'; c.className='perm-state '+(isAcc()?'ok':'no'); }
+    var a=document.getElementById('adminState');
+    if(a){ a.textContent=isAdmin()?'已启用':'未启用'; a.className='perm-state '+(isAdmin()?'ok':'no'); }
     var b=document.getElementById('battState');
     if(b){ var ok=false; if(NATIVE){ try{ ok=GameBridge.isIgnoringBatteryOptimizations(); }catch(e){} }
       b.textContent=ok?'已加入':'未加入'; b.className='perm-state '+(ok?'ok':'no'); }
@@ -356,23 +465,29 @@
   function pushManaged(){
     if(!NATIVE) return;
     try{ GameBridge.setManagedApps(JSON.stringify(cfg.managedApps.map(function(a){return {pkg:a.pkg,limit:a.limit};}))); }catch(e){}
+    try{ GameBridge.setPolicy(cfg.policy||'block'); }catch(e){}
   }
 
   /* ---------- 概览 ---------- */
   function renderOverview(){
     var map=getAllUsage();
-    var totalLimit=0, totalUsed=0;
-    cfg.managedApps.forEach(function(a){ totalLimit+=a.limit; totalUsed+=usageMin(a.pkg,map); });
+    var totalLimit=0, totalUsed=0, over=false;
+    cfg.managedApps.forEach(function(a){
+      var lim=effLimit(a), used=usageMin(a.pkg,map);
+      totalLimit+=lim; totalUsed+=used;
+      if(used>=lim) over=true;
+    });
     document.getElementById('ovUsed').textContent=totalUsed;
     document.getElementById('ovLimit').textContent=totalLimit+' 分';
     document.getElementById('ovRemain').textContent=Math.max(0,totalLimit-totalUsed)+' 分';
     var ratio= totalLimit>0 ? Math.min(1, totalUsed/totalLimit) : 0;
     document.getElementById('ringUsed').setAttribute('stroke-dashoffset', (364.42*(1-ratio)).toFixed(2));
     var badge=document.getElementById('ovBadge');
-    var over=cfg.managedApps.some(function(a){ return usageMin(a.pkg,map)>=a.limit; });
+    var g=readGuard();
     if(cfg.managedApps.length===0){ badge.textContent='未配置'; badge.className='badge warn'; }
-    else if(over){ badge.textContent='已超限'; badge.className='badge lock'; }
-    else { badge.textContent='监控中'; badge.className='badge ok'; }
+    else if(g.paused){ badge.textContent='已暂停'; badge.className='badge warn'; }
+    else if(over){ badge.textContent='有应用超限'; badge.className='badge lock'; }
+    else { badge.textContent='管控中'; badge.className='badge ok'; }
   }
 
   /* ---------- 应用列表（真实已装 / 预览示例） ---------- */
@@ -446,11 +561,12 @@
     var map=getAllUsage();
     var html='';
     cfg.managedApps.forEach(function(a){
-      var used=usageMin(a.pkg,map), lim=a.limit, ratio=Math.min(1,used/lim), over=used>=lim;
+      var used=usageMin(a.pkg,map), lim=effLimit(a), ratio=Math.min(1,used/lim), over=used>=lim;
       var series=[];
       if(NATIVE){ try{ series=JSON.parse(GameBridge.getUsageSeries(a.pkg,7)); }catch(e){ series=[]; } }
       else { series=sampleSeries(a.pkg); }
-      html+='<div class="st-row"><div class="hd"><b>'+esc(a.name)+'</b><span class="v'+(over?' over':'')+'">'+used+' / '+lim+' 分</span></div>'
+      var b=bonusMin(a.pkg);
+      html+='<div class="st-row"><div class="hd"><b>'+esc(a.name)+'</b><span class="v'+(over?' over':'')+'">'+used+' / '+lim+' 分'+(b>0?'（今日+'+b+'）':'')+'</span></div>'
         +'<div class="bar'+(over?' over':'')+'"><i style="width:'+(ratio*100).toFixed(0)+'%"></i></div>';
       if(series.length){
         var max=Math.max.apply(null, series.map(function(x){return Math.round(x/60000);}).concat([lim]));
@@ -461,15 +577,31 @@
           html+='<div class="d"><div class="col" style="height:'+Math.max(3,h).toFixed(0)+'%" title="'+m+'分"></div><div class="lab">'+labs[d.getDay()]+'</div></div>'; });
         html+='</div>';
       }
-      html+='<button class="btn ghost sm" style="margin-top:10px;" onclick="addTime(\''+esc(a.pkg)+'\')">+15分加时</button></div>';
+      html+='<div style="display:flex;gap:8px;margin-top:10px;">'
+        +'<button class="btn ghost sm" style="flex:1;" onclick="addTime(\''+esc(a.pkg)+'\')">今日加时 15 分</button>'
+        +'<button class="btn ghost sm" style="flex:1;" onclick="exemptApp(\''+esc(a.pkg)+'\')">今日豁免</button>'
+        +'</div></div>';
     });
     card.innerHTML=html;
   }
+
+  /** 今日加时：只放宽今天，不改每日基准限额（真实用量归零不了，用加时抵消） */
   window.addTime=function(pkg){
     var mi=managedIndex(pkg); if(mi<0) return;
-    cfg.managedApps[mi].limit+=15; saveCfg(); pushManaged();
-    renderStats(); renderOverview();
-    if(NATIVE){ try{ GameBridge.toast('已为 '+cfg.managedApps[mi].name+' 加时 15 分'); }catch(e){} }
+    if(NATIVE){ try{ GameBridge.addBonus(pkg,15); }catch(e){} }
+    else { PREVIEW_BONUS[pkg]=(PREVIEW_BONUS[pkg]||0)+15; }
+    renderStats(); renderOverview(); refreshGuardBar();
+    toast('已为 '+cfg.managedApps[mi].name+' 今日加时 15 分钟');
+  };
+
+  /** 今日豁免：把今天已经用掉的时长整体抵掉，让该应用今天重新可用 */
+  window.exemptApp=function(pkg){
+    var mi=managedIndex(pkg); if(mi<0) return;
+    if(!confirm('把「'+cfg.managedApps[mi].name+'」今天已用的时长整体抵掉，今天重新计时？')) return;
+    if(NATIVE){ try{ GameBridge.exemptToday(pkg); }catch(e){} }
+    else { PREVIEW_BONUS[pkg]=(PREVIEW_BONUS[pkg]||0)+999; }
+    renderStats(); renderOverview(); refreshGuardBar();
+    toast('已豁免「'+cfg.managedApps[mi].name+'」今日已用时长');
   };
 
   /* ---------- 孩子端 ---------- */
@@ -478,24 +610,39 @@
     if(cfg.managedApps.length===0){ list.innerHTML=''; empty.classList.remove('hidden'); return; }
     empty.classList.add('hidden');
     var map=getAllUsage();
-    var overAny=false, html='';
+    var html='';
     cfg.managedApps.forEach(function(a,idx){
-      var used=usageMin(a.pkg,map), lim=a.limit, remain=Math.max(0,lim-used), over=used>=lim;
-      if(over) overAny=true;
-      var color=AV_COLORS[(a.name.charCodeAt(0)+idx)%AV_COLORS.length];
+      var used=usageMin(a.pkg,map), lim=effLimit(a), remain=Math.max(0,lim-used), over=used>=lim;
       html+='<div class="kid-card'+(over?' over':'')+'"><div class="nm">'+esc(a.name)+'</div>'
-        +'<div class="rem">'+remain+'<small> 分剩余</small></div>'
+        +'<div class="rem">'+(over?'时间已用完':remain+'<small> 分剩余</small>')+'</div>'
         +'<div class="meta">今日已用 '+used+' / 限额 '+lim+' 分</div>'
         +'<div class="pbar"><i style="width:'+Math.min(100,used/lim*100).toFixed(0)+'%"></i></div></div>';
     });
     list.innerHTML=html;
-    var fg = NATIVE? (function(){try{return GameBridge.getForegroundPackage();}catch(e){return '';}})() : '';
+
+    var fg='';
+    if(NATIVE){ try{ fg=GameBridge.getForegroundPackage(); }catch(e){ fg=''; } }
     var playingName='—';
-    if(fg){ for(var i=0;i<cfg.managedApps.length;i++){ if(cfg.managedApps[i].pkg===fg){ playingName='正在玩：'+cfg.managedApps[i].name; break; } } }
+    if(fg){ for(var i=0;i<cfg.managedApps.length;i++){ if(cfg.managedApps[i].pkg===fg){ playingName='正在使用：'+cfg.managedApps[i].name; break; } } }
     document.getElementById('kidPlaying').textContent=playingName;
-    var ov=document.getElementById('lockOverlay');
-    if(overAny){ ov.classList.add('show'); } else { ov.classList.remove('show'); }
+
+    // 注意：这里**不再**自动弹全屏遮罩。
+    // 上一版只要任一应用超限就盖满黑屏且无出口，等于把界面锁死，已废弃。
+    // 真正超限时由原生层弹拦截页，孩子端只做状态展示。
+    hideLock();
   }
+
+  function showLock(title, sub){
+    var ov=document.getElementById('lockOverlay');
+    if(title) document.getElementById('lockTitle').textContent=title;
+    if(sub) document.getElementById('lockSub').innerHTML=sub;
+    ov.classList.add('show');
+  }
+  function hideLock(){
+    var ov=document.getElementById('lockOverlay');
+    if(ov) ov.classList.remove('show');
+  }
+  document.getElementById('lockDismiss').onclick=function(){ hideLock(); };
 
   /* ---------- 模式切换 ---------- */
   function setSeg(m){
@@ -506,9 +653,11 @@
   }
   function showParent(){ mode='parent'; setSeg('parent');
     document.getElementById('parentView').classList.remove('hidden'); document.getElementById('childView').classList.add('hidden');
-    lsSet(MODE_KEY,'parent'); refreshPermStates(); refreshBanners(); renderOverview(); renderStats(); }
+    hideLock();
+    lsSet(MODE_KEY,'parent'); refreshPermStates(); refreshBanners(); refreshGuardBar(); renderOverview(); renderStats(); }
   function showChild(){ mode='child'; setSeg('child');
     document.getElementById('parentView').classList.add('hidden'); document.getElementById('childView').classList.remove('hidden');
+    hideLock();
     lsSet(MODE_KEY,'child'); refreshBanners(); renderKid(); }
   function requestParent(){
     if(!cfg.password){ showParent(); return; }
@@ -535,14 +684,47 @@
   });
 
   /* ---------- 我的：按钮 ---------- */
-  document.getElementById('pwSave').onclick=function(){ var v=document.getElementById('pwInput').value; cfg.password=v; saveCfg(); alert('密码已保存'); };
-  document.getElementById('enableAdmin').onclick=function(){ if(NATIVE){ try{GameBridge.requestAdmin();}catch(e){} } };
+  document.getElementById('pwSave').onclick=function(){
+    var v=document.getElementById('pwInput').value.trim();
+    if(!v){ alert('密码不能为空'); return; }
+    cfg.password=v; saveCfg();
+    if(NATIVE){ try{ GameBridge.setParentPassword(v); }catch(e){} }
+    toast('家长密码已保存');
+  };
+  document.getElementById('enableOverlay').onclick=function(){ if(NATIVE){ try{GameBridge.requestOverlayPermission();}catch(e){} } };
   document.getElementById('enableUsage').onclick=function(){ if(NATIVE){ try{GameBridge.openUsageSettings();}catch(e){} } };
   document.getElementById('enableAcc').onclick=function(){ if(NATIVE){ try{GameBridge.openAccessibilitySettings();}catch(e){} } };
+  document.getElementById('enableAdmin').onclick=function(){ if(NATIVE){ try{GameBridge.requestAdmin();}catch(e){} } };
   document.getElementById('enableBatt').onclick=function(){ if(NATIVE){ try{GameBridge.requestIgnoreBatteryOptimizations();}catch(e){} } };
-  document.getElementById('lockBtn').onclick=function(){ if(NATIVE){ try{GameBridge.lockNow();}catch(e){} } };
-  document.getElementById('stopMonitor').onclick=function(){ if(NATIVE){ try{GameBridge.stopMonitor();}catch(e){} } };
-  document.getElementById('resetAll').onclick=function(){ if(confirm('确定清空所有管控应用与限额？')){ cfg.managedApps=[]; saveCfg(); pushManaged(); if(NATIVE){try{GameBridge.stopMonitor();}catch(e){}} renderAppList(); renderOverview(); renderStats(); renderKid(); } };
+  document.getElementById('lockBtn').onclick=function(){
+    if(!confirm('立即锁定屏幕？这会锁住整台手机。')) return;
+    if(NATIVE){ try{ GameBridge.lockNow(); }catch(e){} }
+  };
+  document.getElementById('pause30').onclick=function(){ doPause(30); toast('已暂停管控 30 分钟'); };
+  document.getElementById('resumeNow').onclick=function(){ doResume(); toast('已恢复管控'); };
+  document.getElementById('resetAll').onclick=function(){
+    if(!confirm('确定清空所有管控应用与限额？')) return;
+    cfg.managedApps=[]; saveCfg(); pushManaged();
+    if(NATIVE){ try{ GameBridge.stopMonitor(); }catch(e){} }
+    renderAppList(); renderOverview(); renderStats(); renderKid(); refreshGuardBar();
+  };
+
+  /* ---------- 处理方式（策略）切换 ---------- */
+  function bindPolicyRadios(){
+    var rs=document.querySelectorAll('input[name="policy"]');
+    for(var i=0;i<rs.length;i++){
+      rs[i].checked = (rs[i].value === (cfg.policy||'block'));
+      rs[i].onchange = function(){
+        if(!this.checked) return;
+        cfg.policy=this.value; saveCfg(); pushManaged();
+        if(this.value!=='block'){
+          toast('已切换为更强制的方式，请确认对应权限已授予');
+          refreshPermStates();
+        }
+      };
+    }
+  }
+  bindPolicyRadios();
 
   /* ---------- 工具 ---------- */
   function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
@@ -555,13 +737,14 @@
       if(ap){ var p=ap.dataset.page; if(p==='overview') renderOverview(); if(p==='stats') renderStats(); if(p==='apps') renderAppList(); }
       refreshPermStates();
     }
-    refreshBanners();
+    refreshBanners(); refreshGuardBar();
   }, 5000);
 
   /* ---------- 原生回调：App 从后台/设置页回到前台时刷新真实数据 ---------- */
   window.__onNativeResume = function(){
     try{
-      refreshBanners(); refreshPermStates();
+      hideLock();
+      refreshBanners(); refreshPermStates(); refreshGuardBar();
       if(mode==='child'){ renderKid(); }
       else { renderOverview(); renderStats(); }
       pushManaged();
@@ -570,10 +753,13 @@
 
   /* ---------- 启动（默认进家长端，便于配置；任何异常都不影响界面显示） ---------- */
   try{
+    // 把网页里的配置同步给原生：限额清单 + 执行策略 + 家长密码
+    pushManaged();
+    if(NATIVE && cfg.password){ try{ GameBridge.setParentPassword(cfg.password); }catch(e){} }
     var startMode = lsGet(MODE_KEY)||'parent';
     if(startMode==='child'){ showChild(); } else { showParent(); }
   }catch(e){ showParent(); }
-  refreshBanners();
+  refreshBanners(); refreshGuardBar();
 })();
 </script>
 </body>

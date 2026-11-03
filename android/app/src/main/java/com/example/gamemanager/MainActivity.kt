@@ -23,6 +23,10 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // 先把管控状态装好：限额清单、暂停态、执行策略、今日加时
+        MonitorService.restore(this)
+        Guard.init(this)
+
         web = WebView(this)
         web.setBackgroundColor(0xFFF5F6FA.toInt())
         setContentView(web)
@@ -73,6 +77,8 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        // 家长进到本应用，拦截层必须让开
+        OverlayBlocker.hide()
         if (this::web.isInitialized) web.onResume()
         // 每次回到前台，通知网页刷新真实数据（时长会变、授权状态可能刚改）
         if (this::web.isInitialized) {

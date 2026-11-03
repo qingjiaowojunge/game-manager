@@ -5,8 +5,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -18,10 +16,13 @@ import androidx.core.app.NotificationCompat
 import org.json.JSONArray
 
 /**
- * 前台服务：持续读取「受管控应用」的【真实】前台时长（UsageStatsManager），
- * 任一应用今日真实时长达到其限额即调用 DevicePolicyManager.lockNow() 真锁屏。
- * 受管控清单由 GameBridge.setManagedApps() 写入，并落盘到 SharedPreferences
- * （进程被系统回收后重启服务仍保留限额，不会静默失效）。
+ * 前台监控服务。
+ *
+ * 与上一版的根本区别（上一版是"一碰就锁、界面自动退出"的元凶）：
+ * - 只对**真正处于前台**的受管控应用动作，本应用/桌面/系统界面永不触发；
+ * - 默认只拉全屏拦截页，不锁屏；锁屏需要家长在设置里显式开启；
+ * - 判定与冷却统一走 Guard，同一应用 90 秒内不重复；
+ * - 家长暂停期间完全不动手。
  */
 class MonitorService : Service() {
 
@@ -29,7 +30,7 @@ class MonitorService : Service() {
         private const val PREF = "gm_monitor"
         private const val KEY = "managed_apps"
 
-        /** pkg -> 每日限额(分钟) */
+        /** pkg -> 每日限额(分钟)，基准值，不含今日加时 */
         @Volatile var managedApps: MutableMap<String, Int> = HashMap()
 
         private fun parse(json: String): HashMap<String, Int> {
@@ -42,7 +43,7 @@ class MonitorService : Service() {
                     val limit = o.optInt("limit", 0)
                     if (pkg.isNotEmpty() && limit > 0) map[pkg] = limit
                 }
-            } catch (e: Exception) { /* 忽略解析错误 */ }
+            } catch (e: Exception) { }
             return map
         }
 
@@ -65,12 +66,12 @@ class MonitorService : Service() {
     }
 
     private val handler = Handler(Looper.getMainLooper())
-    private val dpm by lazy { getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager }
-    private val admin by lazy { ComponentName(this, AdminReceiver::class.java) }
+    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
 
     override fun onCreate() {
         super.onCreate()
         restore(this)
+        Guard.init(this)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(1, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
@@ -79,27 +80,37 @@ class MonitorService : Service() {
         loop()
     }
 
-    /** 每 15 秒检查一次真实用量 */
+    /** 每 10 秒检查一次；只关心"此刻在前台的那个应用"。
+     *  查询用量要跨进程，放后台线程跑，避免卡住界面。 */
     private fun loop() {
         handler.postDelayed({
-            checkAndLock()
-            loop()
-        }, 15000)
-    }
-
-    private fun checkAndLock() {
-        if (managedApps.isEmpty()) return
-        if (!UsageUtil.hasUsagePermission(this)) return
-        val map = UsageUtil.queryUsageMap(this, UsageUtil.dayStartMs(), System.currentTimeMillis())
-        for ((pkg, limitMin) in managedApps) {
-            val usedMs = map[pkg] ?: 0L
-            if (usedMs >= limitMin * 60_000L) {
-                if (dpm.isAdminActive(admin)) {
-                    dpm.lockNow()
-                    return
+            worker.execute {
+                try {
+                    tick()
+                } catch (e: Exception) {
+                    // 任何异常都不许让监控循环断掉
                 }
             }
+            loop()
+        }, 10_000L)
+    }
+
+    private fun tick() {
+        if (Guard.isPausedNow()) return
+        if (managedApps.isEmpty()) return
+        if (!UsageUtil.hasUsagePermission(this)) return
+
+        val fg = UsageUtil.foregroundPackage(this)
+        if (fg.isEmpty()) return
+        // 家长打开了本应用 → 立刻撤掉拦截层，绝不能让家长自己被挡住
+        if (fg == packageName) {
+            OverlayBlocker.hide()
+            return
         }
+        // 非受管控应用、桌面、系统界面 → Guard 内部直接跳过
+        if (!Guard.shouldHandle(this, fg)) return
+        // 冷却票据已由 Guard 占用，执行统一交给 Enforcer（与无障碍链路同一套动作）
+        Enforcer.enforce(this, fg)
     }
 
     private fun buildNotification(): Notification {
@@ -113,14 +124,25 @@ class MonitorService : Service() {
         val pi = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
         )
+        val state = when {
+            Guard.isPausedNow() -> "已暂停管控"
+            managedApps.isEmpty() -> "未配置受管控应用"
+            else -> "正在监控 ${managedApps.size} 个应用"
+        }
         return NotificationCompat.Builder(this, ch)
             .setContentTitle("游戏管理软件")
-            .setContentText("正在监控真实使用时长")
+            .setContentText(state)
             .setSmallIcon(R.drawable.ic_notif)
             .setContentIntent(pi)
+            .setOngoing(true)
             .build()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-    override fun onDestroy() { super.onDestroy() }
+
+    override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
+        try { worker.shutdownNow() } catch (e: Exception) { }
+        super.onDestroy()
+    }
 }

@@ -2,32 +2,46 @@ package com.example.gamemanager
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
-import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
-import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 
 /**
- * 无障碍服务（增强拦截）：当【真实】用量已超限、且前台正是最前面的受管控应用时，
- * 将其退回桌面，必要时锁屏。需在系统"无障碍"中手动开启本服务才会生效。
+ * 无障碍服务 —— 可选增强，不是必需的。
+ *
+ * 作用只有一个：家长开启"拦截页 + 退回桌面"策略时，把受管控应用真正压到后台。
+ * （无障碍服务能调 performGlobalAction(GLOBAL_ACTION_HOME)，普通服务不能。）
+ *
+ * 行为约束（上一版反复弹锁的根源就在这儿，已改）：
+ * - 只处理"窗口切到受管控应用"这一种事件；
+ * - 判定统一走 Guard（含前台感知、超限判定、90 秒冷却、暂停）；
+ * - 本应用、桌面、系统界面的事件一律忽略；
+ * - 绝不在这里锁屏。
  */
 class AppMonitorAccessibilityService : AccessibilityService() {
 
-    // 缓存真实用量，避免每次窗口事件都查
-    private var cacheMap: Map<String, Long> = HashMap()
-    private var cacheTime: Long = 0L
+    companion object {
+        @Volatile private var instance: AppMonitorAccessibilityService? = null
 
-    private fun usageMap(): Map<String, Long> {
-        val now = System.currentTimeMillis()
-        if (now - cacheTime > 10_000L) {
-            cacheMap = UsageUtil.queryUsageMap(this, UsageUtil.dayStartMs(), now)
-            cacheTime = now
+        /** 供后台服务请求"退回桌面"（只能由无障碍服务执行） */
+        fun requestHome() {
+            val s = instance ?: return
+            s.handler.post {
+                try {
+                    s.performGlobalAction(GLOBAL_ACTION_HOME)
+                } catch (e: Exception) { }
+            }
         }
-        return cacheMap
+
+        fun isRunning(): Boolean = instance != null
     }
 
+    private val handler = Handler(Looper.getMainLooper())
+
     override fun onServiceConnected() {
-        MonitorService.restore(this)   // 无障碍服务可能先于主界面/前台服务被系统拉起
+        instance = this
+        MonitorService.restore(this)
+        Guard.init(this)
         val info = AccessibilityServiceInfo()
         info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
@@ -39,14 +53,18 @@ class AppMonitorAccessibilityService : AccessibilityService() {
         if (event == null) return
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
-        val limitMin = MonitorService.managedApps[pkg] ?: return
-        val usedMs = usageMap()[pkg] ?: 0L
-        if (usedMs >= limitMin * 60_000L) {
-            performGlobalAction(GLOBAL_ACTION_HOME)
-            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-            if (dpm.isAdminActive(ComponentName(this, AdminReceiver::class.java))) dpm.lockNow()
-        }
+
+        // 判定集中在 Guard：非受管控应用 / 没超限 / 在冷却 / 家长已暂停 → 全部跳过
+        if (!Guard.shouldHandle(this, pkg)) return
+
+        // 走到这里才说明真该处置，交给统一执行器（拉拦截页，必要时附带退回桌面）
+        Enforcer.enforce(this, pkg)
     }
 
-    override fun onInterrupt() {}
+    override fun onInterrupt() { }
+
+    override fun onDestroy() {
+        instance = null
+        super.onDestroy()
+    }
 }

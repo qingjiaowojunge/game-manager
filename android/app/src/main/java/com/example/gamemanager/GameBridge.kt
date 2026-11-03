@@ -52,17 +52,7 @@ class GameBridge(private val activity: Activity) {
 
     /** 当前真实前台应用包名（需用量权限） */
     @JavascriptInterface
-    fun getForegroundPackage(): String {
-        if (!UsageUtil.hasUsagePermission(activity)) return ""
-        val usm = activity.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
-        val end = System.currentTimeMillis()
-        val stats = usm.queryUsageStats(android.app.usage.UsageStatsManager.INTERVAL_DAILY, end - 2000, end)
-        var recent: android.app.usage.UsageStats? = null
-        for (s in stats) {
-            if (recent == null || s.lastTimeUsed > recent.lastTimeUsed) recent = s
-        }
-        return recent?.packageName ?: ""
-    }
+    fun getForegroundPackage(): String = UsageUtil.foregroundPackage(activity)
 
     /* ---------- 管控配置 ---------- */
 
@@ -70,7 +60,84 @@ class GameBridge(private val activity: Activity) {
     @JavascriptInterface
     fun setManagedApps(json: String) {
         MonitorService.setManagedApps(activity, json)
+        Guard.init(activity)
+        Guard.clearAllStrikes()
         startMonitor()
+    }
+
+    /* ---------- 管控状态 / 暂停 / 策略 ---------- */
+
+    /** 管控整体状态 JSON: {paused,pauseRemain,policy,fg} */
+    @JavascriptInterface
+    fun getGuardState(): String = Guard.stateJson(activity)
+
+    /** 暂停管控 minutes 分钟（0=无限期）。家长配置/要玩的时候用 */
+    @JavascriptInterface
+    fun pauseGuard(minutes: Int) {
+        Guard.pause(activity, minutes)
+        OverlayBlocker.hide()
+        clearBlock()
+    }
+
+    /** 恢复管控 */
+    @JavascriptInterface
+    fun resumeGuard() {
+        Guard.resume(activity)
+    }
+
+    /** 执行策略：block（仅拦截页）/ block_home（拦截页+退回桌面）/ lock（拦截页+锁屏） */
+    @JavascriptInterface
+    fun setPolicy(p: String) {
+        Guard.setPolicy(activity, p)
+    }
+
+    /** 关闭正在显示的拦截页 */
+    @JavascriptInterface
+    fun clearBlock() {
+        Enforcer.blockShowing = false
+    }
+
+    /* ---------- 悬浮窗权限（拦截页最稳的通道） ---------- */
+
+    @JavascriptInterface
+    fun hasOverlayPermission(): Boolean = OverlayBlocker.canOverlay(activity)
+
+    @JavascriptInterface
+    fun requestOverlayPermission() {
+        try {
+            val i = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:" + activity.packageName)
+            )
+            activity.startActivity(i)
+        } catch (e: Exception) {
+            openAppDetailsSettings()
+        }
+    }
+
+    /* ---------- 今日加时 / 豁免 ---------- */
+
+    /** 今日加时（只影响今天，不改动每日基准限额） */
+    @JavascriptInterface
+    fun addBonus(pkg: String, minutes: Int) {
+        Guard.addBonus(activity, pkg, minutes)
+        Guard.clearStrike(pkg)
+    }
+
+    /** 今日豁免：把该应用今天已用的时长整体抵消掉 */
+    @JavascriptInterface
+    fun exemptToday(pkg: String) {
+        Guard.exemptToday(activity, pkg)
+        Guard.clearStrike(pkg)
+    }
+
+    @JavascriptInterface
+    fun getBonus(pkg: String): Int = Guard.bonus(activity, pkg)
+
+    /** 家长密码同步给原生，供全屏拦截页验证 */
+    @JavascriptInterface
+    fun setParentPassword(pwd: String) {
+        Guard.setParentPassword(activity, pwd)
     }
 
     /* ---------- 设备能力 ---------- */

@@ -16,6 +16,44 @@ import org.json.JSONObject
  */
 object UsageUtil {
 
+    /**
+     * 前台应用判定用的增量游标。
+     * 事件类型 1 == MOVE_TO_FOREGROUND（API29 起叫 ACTIVITY_RESUMED，数值相同）。
+     */
+    private var evCursor: Long = 0L
+    @Volatile private var evFg: String = ""
+
+    /**
+     * 当前真实前台应用包名。
+     * 用 UsageEvents 增量回溯（首次回溯到今天 0 点），比 queryUsageStats 的 lastTimeUsed 准，
+     * 且不会每次重扫一整天事件（避免监控循环里反复做重活）。
+     */
+    @Synchronized
+    fun foregroundPackage(ctx: Context): String {
+        if (!hasUsagePermission(ctx)) return ""
+        val usm = ctx.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return evFg
+        val now = System.currentTimeMillis()
+        // 冷启动 / 时钟回拨 / 距上次查询过久 → 回溯到今天 0 点重建状态
+        if (evCursor <= 0L || evCursor > now || now - evCursor > 10 * 60_000L) {
+            evCursor = dayStartMs()
+        }
+        try {
+            val events = usm.queryEvents(evCursor, now) ?: return evFg
+            val e = android.app.usage.UsageEvents.Event()
+            while (events.hasNextEvent()) {
+                events.getNextEvent(e)
+                if (e.eventType == 1) {           // MOVE_TO_FOREGROUND / ACTIVITY_RESUMED
+                    val p = e.packageName
+                    if (!p.isNullOrEmpty()) evFg = p
+                }
+            }
+            evCursor = now
+        } catch (e: Exception) {
+            // 查事件失败就退回上一次已知结果，不要因此误判
+        }
+        return evFg
+    }
+
     /** 今天 00:00 的毫秒时间戳（本地时区） */
     fun dayStartMs(): Long {
         val c = java.util.Calendar.getInstance()

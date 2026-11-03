@@ -14,6 +14,8 @@
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="GooglePlayPolicy" />
+    <!-- 拦截页最稳的通道：显示在其他应用上层（Android 10+ 后台服务不允许随意起 Activity） -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:allowBackup="true"
@@ -30,6 +32,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 全屏拦截页：超限后盖住屏幕（悬浮窗不可用时的备用通道） -->
+        <activity
+            android:name=".BlockActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:screenOrientation="portrait"
+            android:taskAffinity="com.example.gamemanager.block"
+            android:theme="@style/AppTheme" />
 
         <receiver
             android:name=".AdminReceiver"
