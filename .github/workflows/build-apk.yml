@@ -122,10 +122,26 @@ jobs:
           name: apk
           path: output/
 
+      - name: 解析版本号与文件名
+        run: |
+          # GITHUB_ENV 只在单个 job 内有效，pages 是独立 job，必须从产物文件名反解
+          f=$(ls output/GameManager-v*.apk 2>/dev/null | head -1)
+          if [ -n "$f" ]; then
+            base=$(basename "$f")
+            VN=$(echo "$base" | sed -E 's/^GameManager-v(.*)-[0-9]+\.apk$/\1/')
+            VC=$(echo "$base" | sed -E 's/^GameManager-v(.*)-([0-9]+)\.apk$/\2/')
+          else
+            base="GameManager.apk"; VN="?"; VC="?"
+          fi
+          echo "VN=$VN" >> "$GITHUB_ENV"
+          echo "VC=$VC" >> "$GITHUB_ENV"
+          echo "APKF=$base" >> "$GITHUB_ENV"
+          echo "解析到: $base -> v$VN ($VC)"
+
       - name: 生成下载落地页
         run: |
           sha="$(cat output/apk.sha256 2>/dev/null || echo '')"
-          APK="GameManager-v${VN}-${VC}.apk"
+          APK="$APKF"
           cat > output/index.html <<HTML
           <!doctype html><html lang="zh"><head><meta charset="utf-8">
           <meta name="viewport" content="width=device-width,initial-scale=1">
