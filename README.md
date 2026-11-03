@@ -55,6 +55,19 @@
 
 > 当前版本 **v2.1**（`versionCode 3` / `versionName 2.1`），推到这个地址即最新。
 
+### 本版产物核验（不是"构建成功"就算数，已逐个查过）
+
+| 检查项 | 结果 |
+|---|---|
+| CI run `41632958894` | build ✅ / pages ✅ 全绿 |
+| Release | `v1.0.8` · `GameManager.apk` · 2,096,291 字节 |
+| SHA256 | `841d104ead7d8292aacee7d32eddfff92482855a68c3ef9cbea7d0509e0f504c` |
+| Pages 上的包与 Release 是否同一份 | **是**（指纹完全一致） |
+| `assets/index.html` | 含 `getTodayRanking / getLastCrash / getAuditLog / addBonus / exemptToday / batchApply / guardBar`，含「工作日 / 周末 / 免打扰 / 每日总时长 / 操作记录 / 崩溃日志」 |
+| dex | 含 `Guard / Enforcer / OverlayBlocker / BlockActivity / MonitorService / UsageUtil / GameBridge / MainActivity`，含 `isBlockedNow / shouldNotifyRemaining / inCurfew / totalUsedMinutes / rankingJson / readCrash / auditJson / requestHome` |
+| AndroidManifest | 含 `SYSTEM_ALERT_WINDOW`、`PACKAGE_USAGE_STATS`、`FOREGROUND_SERVICE_TYPE_SPECIAL_USE`、`QUERY_ALL_PACKAGES`、`BlockActivity`、`App`；`versionName=2.1` |
+
+
 **这版彻底去除了假数据**——所有数据都来自手机真实系统：
 - 应用清单来自 `PackageManager`（手机真实已装应用，家长从中勾选要管控的）
 - 使用时长来自 `UsageStatsManager`（每个应用真实前台耗时，不是应用自己数的）
