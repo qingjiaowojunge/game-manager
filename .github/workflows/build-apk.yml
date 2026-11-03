@@ -60,8 +60,15 @@ jobs:
       - name: 重命名 APK 并计算指纹
         run: |
           mkdir -p output
+          VN=$(grep -oP 'versionName\s+"\K[^"]+' android/app/build.gradle)
+          VC=$(grep -oP 'versionCode\s+\K[0-9]+' android/app/build.gradle)
+          echo "VN=$VN" >> "$GITHUB_ENV"
+          echo "VC=$VC" >> "$GITHUB_ENV"
           cp android/app/build/outputs/apk/debug/app-debug.apk "output/GameManager.apk"
+          # 带版本号的文件名：手机浏览器和 CDN 都按 URL 缓存，同名文件会一直下发旧包
+          cp android/app/build/outputs/apk/debug/app-debug.apk "output/GameManager-v${VN}-${VC}.apk"
           sha256sum output/GameManager.apk | awk '{print $1}' > output/apk.sha256
+          echo "产出版本: v${VN} (${VC})"
           ls -la output/
 
       - name: 生成二维码（指向 Pages 直接下载，失败不阻断出包）
@@ -94,6 +101,7 @@ jobs:
             SHA256 见附件 GameManager.apk.sha256。
           files: |
             output/GameManager.apk
+            output/GameManager-v*.apk
             output/qr.png
             output/apk.sha256
           prerelease: false
@@ -117,19 +125,26 @@ jobs:
       - name: 生成下载落地页
         run: |
           sha="$(cat output/apk.sha256 2>/dev/null || echo '')"
+          APK="GameManager-v${VN}-${VC}.apk"
           cat > output/index.html <<HTML
           <!doctype html><html lang="zh"><head><meta charset="utf-8">
           <meta name="viewport" content="width=device-width,initial-scale=1">
-          <title>下载 游戏管理软件</title>
+          <meta http-equiv="Cache-Control" content="no-store, must-revalidate">
+          <title>下载 游戏管理软件 v${VN}</title>
           <style>body{font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei";background:#f3f5f9;color:#111827;display:flex;min-height:100vh;margin:0}
           main{margin:auto;text-align:center;padding:28px}a{display:block;width:100%;max-width:360px;margin:16px auto;padding:16px;background:#2563eb;color:#fff;border-radius:14px;text-decoration:none;font-size:17px;font-weight:700}
-          code{background:#eef2f7;padding:2px 6px;border-radius:6px;font-size:12px;word-break:break-all}</style></head>
+          code{background:#eef2f7;padding:2px 6px;border-radius:6px;font-size:12px;word-break:break-all}
+          .ver{display:inline-block;background:#dcfce7;color:#166534;font-weight:800;font-size:14px;padding:6px 14px;border-radius:20px;margin:4px 0 10px}
+          .tip{font-size:12.5px;color:#64748b;max-width:360px;margin:14px auto 0;line-height:1.6}</style></head>
           <body><main>
             <h1>游戏管理软件</h1>
+            <div class="ver">当前版本 v${VN} (${VC})</div>
             <p>安装：设置 → 安全 → 允许未知来源 → 打开 APK。</p>
-            <div><img src="qr.png" width="220" height="220" alt="二维码" onerror="this.style.display='none'"></div>
-            <a href="GameManager.apk">下载 GameManager.apk</a>
+            <div><img src="qr.png" width="200" height="200" alt="二维码" onerror="this.style.display='none'"></div>
+            <a href="${APK}">下载 ${APK}</a>
             <p>SHA256：<code>${sha}</code></p>
+            <div class="tip">装完到「我的 → 崩溃日志」最下面一行核对版本号，不是 v${VN} 就说明还在用旧包。<br>
+            文件名带版本号，所以下载到的必然是这个版本，不会被浏览器缓存成旧的。</div>
           </main></body></html>
           HTML
 
