@@ -59,10 +59,10 @@
 
 | 检查项 | 结果 |
 |---|---|
-| CI run `41632958894` | build ✅ / pages ✅ 全绿 |
-| Release | `v1.0.8` · `GameManager.apk` · 2,096,291 字节 |
-| SHA256 | `841d104ead7d8292aacee7d32eddfff92482855a68c3ef9cbea7d0509e0f504c` |
-| Pages 上的包与 Release 是否同一份 | **是**（指纹完全一致） |
+| CI | run `41632958894`（v1.0.8）/ `41633737189`（v1.0.9）均 build ✅ pages ✅ |
+| Release | **`v1.0.9`** · `GameManager.apk` · 2,096,291 字节 |
+| SHA256 | `d79fce7e6d2f4b761424aa8c4ee0c16c17a0f62b8dec40282fb948dcc14a9593` |
+| Pages 上的包与 Release 是否同一份 | **是**（同一 sha256） |
 | `assets/index.html` | 含 `getTodayRanking / getLastCrash / getAuditLog / addBonus / exemptToday / batchApply / guardBar`，含「工作日 / 周末 / 免打扰 / 每日总时长 / 操作记录 / 崩溃日志」 |
 | dex | 含 `Guard / Enforcer / OverlayBlocker / BlockActivity / MonitorService / UsageUtil / GameBridge / MainActivity`，含 `isBlockedNow / shouldNotifyRemaining / inCurfew / totalUsedMinutes / rankingJson / readCrash / auditJson / requestHome` |
 | AndroidManifest | 含 `SYSTEM_ALERT_WINDOW`、`PACKAGE_USAGE_STATS`、`FOREGROUND_SERVICE_TYPE_SPECIAL_USE`、`QUERY_ALL_PACKAGES`、`BlockActivity`、`App`；`versionName=2.1` |
@@ -166,6 +166,7 @@ git push -u origin main
 ## 出包踩坑记录（改代码前先看，避免重犯）
 | 曾经报错 | 真实原因 | 正确做法 |
 |---|---|---|
+| `git push` 报 `schannel: failed to receive handshake` / `CONNECT tunnel failed, response 502` | 本机到 `github.com:443` 被出口代理拦截，但 `api.github.com` 正常 | 用 `python push_api.py`，走 Git Data API（blob→tree→commit→改 ref），内容按 tree 校验，等价 push 且照样触发 Actions |
 | `sdkmanager tools` 退出码 1 | `android-actions/setup-android@v3` 与 runner 自带 cmdline-tools 冲突 | 用 runner 自带 `/usr/local/lib/android/sdk` + 显式 `sdkmanager` 装 platform/build-tools，并写 `android/local.properties` |
 | `Unresolved reference: FEEDBACK_ALL_MASK` | 常量属于 `AccessibilityServiceInfo`，不是 `AccessibilityManager` | `AccessibilityServiceInfo.FEEDBACK_ALL_MASK` |
 | `'onEnabled' overrides nothing` | Java 平台类型参数不能用 `Context?` / `Intent?` 重写 | 用非空 `Context` / `Intent`，或直接不写这两个重写 |
