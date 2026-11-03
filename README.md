@@ -69,15 +69,16 @@ WebView 的渲染进程是独立进程。内存紧张、或厂商 ROM 清理后�
 - 手机下载页：<https://qingjiaowojunge.github.io/game-manager/>
 - 仓库：<https://github.com/qingjiaowojunge/game-manager>
 
-> 当前版本 **v2.4**（`versionCode 6` / `versionName 2.4`），推到这个地址即最新。
+> 当前版本 **v2.4 (8)**（`versionName 2.4` / `versionCode 8`），推到这个地址即最新。
+> 下载文件名带版本号（如 `GameManager-v2.4-8.apk`），**不会被浏览器缓存成旧包**；换版本时文件名必然变化。
 
 ### 本版产物核验（不是"构建成功"就算数，已逐个查过）
 
 | 检查项 | 结果 |
 |---|---|
 | CI | run `41632958894`(v1.0.8) / `41633737189`(v1.0.9) / `41634691926`(v1.0.10) 均 build ✅ pages ✅ |
-| Release | **`v1.0.12`**（v2.4）· `GameManager.apk` · 2,102,355 字节 |
-| SHA256 | `9e3b8ffefbe47214c9922d0139fb07e1133449e394a56fb1e59a01527c68f781` |
+| Release | **`v1.0.14`**（v2.4 build 8）· `GameManager-v2.4-8.apk` · 2,102,355 字节 |
+| SHA256 | `485966900b69b2a1…`（完整值见下载页或 `apk.sha256`） |
 | Pages 上的包与 Release 是否同一份 | **是**（同一 sha256） |
 | `assets/index.html` | 含 `getTodayRanking / getLastCrash / getAuditLog / addBonus / exemptToday / batchApply / guardBar`，含「工作日 / 周末 / 免打扰 / 每日总时长 / 操作记录 / 崩溃日志」 |
 | dex | 含 `Guard / Enforcer / OverlayBlocker / BlockActivity / MonitorService / UsageUtil / GameBridge / MainActivity`，含 `isBlockedNow / shouldNotifyRemaining / inCurfew / totalUsedMinutes / rankingJson / readCrash / auditJson / requestHome` |
@@ -182,6 +183,8 @@ git push -u origin main
 ## 出包踩坑记录（改代码前先看，避免重犯）
 | 曾经报错 | 真实原因 | 正确做法 |
 |---|---|---|
+| 手机下载到的总是旧包 | 浏览器与 Pages CDN 按 **URL** 缓存，文件名固定就会一直下发旧包 | 产物文件名带版本号 `GameManager-v<版本>-<构建号>.apk`，每次发版文件名必变；下载页也标出版本号便于核对 |
+| 下载页版本号显示为空 | `GITHUB_ENV` 只在**单个 job 内**有效，`pages` 是独立 job 拿不到 `build` 里设的变量 | 在 `pages` 任务里从产物文件名 `GameManager-v*-*.apk` 反解版本号 |
 | `git push` 报 `schannel: failed to receive handshake` / `CONNECT tunnel failed, response 502` | 本机到 `github.com:443` 被出口代理拦截，但 `api.github.com` 正常 | 用 `python push_api.py`，走 Git Data API（blob→tree→commit→改 ref），内容按 tree 校验，等价 push 且照样触发 Actions |
 | `sdkmanager tools` 退出码 1 | `android-actions/setup-android@v3` 与 runner 自带 cmdline-tools 冲突 | 用 runner 自带 `/usr/local/lib/android/sdk` + 显式 `sdkmanager` 装 platform/build-tools，并写 `android/local.properties` |
 | `Unresolved reference: FEEDBACK_ALL_MASK` | 常量属于 `AccessibilityServiceInfo`，不是 `AccessibilityManager` | `AccessibilityServiceInfo.FEEDBACK_ALL_MASK` |
