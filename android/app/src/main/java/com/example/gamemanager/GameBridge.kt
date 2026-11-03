@@ -84,13 +84,11 @@ class GameBridge(private val activity: Activity) {
 
     /* ---------- 管控配置 ---------- */
 
-    /** 设置受管控应用与限额: JSON 数组 [{pkg, limit}]，limit 单位分钟；落盘并启动监控 */
+    /** 下发完整管控配置（限额规则/总时长/免打扰/提醒），落盘并启动监控 */
     @JavascriptInterface
     fun setManagedApps(json: String) {
         safeUnit {
-            MonitorService.setManagedApps(activity, json)
-            Guard.init(activity)
-            Guard.clearAllStrikes()
+            Guard.applyConfig(activity, json)
             startMonitorInternal()
         }
     }
@@ -162,6 +160,16 @@ class GameBridge(private val activity: Activity) {
 
     @JavascriptInterface
     fun getBonus(pkg: String): Int = safe(0) { Guard.bonus(activity, pkg) }
+
+    /* ---------- 操作记录（家长审计） ---------- */
+
+    @JavascriptInterface
+    fun getAuditLog(): String = safe("[]") { Guard.auditJson(activity) }
+
+    @JavascriptInterface
+    fun clearAuditLog() {
+        safeUnit { Guard.clearAudit(activity) }
+    }
 
     @JavascriptInterface
     fun setParentPassword(pwd: String) {

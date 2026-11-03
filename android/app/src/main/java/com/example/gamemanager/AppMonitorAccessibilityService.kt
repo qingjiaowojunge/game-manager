@@ -40,7 +40,6 @@ class AppMonitorAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         instance = this
-        MonitorService.restore(this)
         Guard.init(this)
         val info = AccessibilityServiceInfo()
         info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED

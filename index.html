@@ -84,6 +84,18 @@
   .crashbox{background:#0f172a;color:#e2e8f0;font-size:11px;line-height:1.55;border-radius:10px;
     padding:12px;max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:10px 0 0;
     font-family:ui-monospace,Menlo,Consolas,monospace;}
+  /* 行内数字输入 / 时间区间 */
+  .numinline{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--muted);}
+  .numinline input{width:60px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;
+    font-size:13px;text-align:center;background:#fff;}
+  .timerow{display:flex;align-items:center;gap:9px;margin-top:9px;font-size:12.5px;color:var(--muted);}
+  .timerow input{flex:1;padding:9px 10px;border:1px solid var(--border);border-radius:10px;font-size:13px;background:#fff;}
+  /* 操作记录 */
+  .au-row{display:flex;align-items:baseline;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px;}
+  .au-row:last-child{border-bottom:none;}
+  .au-time{color:var(--muted);flex:none;font-size:11.5px;}
+  .au-txt{flex:1;min-width:0;line-height:1.5;}
+  .au-type{font-weight:700;}
   .chk{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);cursor:pointer;}
   .chk input{width:16px;height:16px;accent-color:var(--primary);}
   .approw{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);}
@@ -221,6 +233,7 @@
               <div class="row"><span>状态</span><span id="ovBadge" class="badge warn">未配置</span></div>
             </div>
           </div>
+          <div class="note" id="ovTotal"></div>
         </div>
         <div class="card" id="rankCard">
           <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V11M10 20V4M16 20V14M22 20V8"/></svg>今天都在用什么</h3>
@@ -292,11 +305,37 @@
             <span><b>拦截页 + 直接锁屏</b><div class="od">最强制，会锁住整台手机。需要设备管理员，且会打断你自己的操作，慎用。</div></span></label>
         </div>
         <div class="card">
+          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>额度与时段</h3>
+          <label class="optrow"><input type="checkbox" id="weekendSplit">
+            <span><b>工作日 / 周末分开设</b><div class="od">关闭时周末沿用工作日的限额。</div></span></label>
+          <div class="perm-row"><span>每日总时长上限（受管应用合计）</span>
+            <span class="numinline"><input type="number" min="0" id="totalLimit" value="0"> 分</span></div>
+          <div class="note">填 0 表示不限总时长，只按单个应用算。</div>
+          <label class="optrow" style="margin-top:6px;"><input type="checkbox" id="curfewOn">
+            <span><b>免打扰时段</b><div class="od">这段时间内所有受管应用一律拦截，适合睡觉时间。</div></span></label>
+          <div class="timerow">
+            <input type="time" id="curfewStart" value="22:00">
+            <span>至</span>
+            <input type="time" id="curfewEnd" value="07:00">
+          </div>
+          <div class="perm-row" style="margin-top:6px;"><span>快用完时提前提醒</span>
+            <span class="numinline"><input type="number" min="0" max="60" id="notifyBefore" value="5"> 分前</span></div>
+          <div class="note">填 0 关闭提醒。提醒每个应用每天只发一次。</div>
+        </div>
+
+        <div class="card">
           <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 9v4M12 17v.01"/><path d="M10.3 3.9L2.4 18a1.6 1.6 0 0 0 1.4 2.4h16.4a1.6 1.6 0 0 0 1.4-2.4L13.7 3.9a1.6 1.6 0 0 0-2.8 0z"/></svg>崩溃日志</h3>
           <div class="note" id="crashHint">如果应用闪退过，这里能看到原因。把内容发给我就能定位。</div>
           <pre id="crashBox" class="crashbox hidden"></pre>
           <button class="btn ghost sm" id="crashView" style="width:100%;margin-top:10px;">查看最近一次崩溃</button>
           <button class="btn ghost sm" id="crashClear" style="width:100%;margin-top:8px;">清除记录</button>
+        </div>
+
+        <div class="card">
+          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5h16M4 12h16M4 19h10"/></svg>操作记录</h3>
+          <div id="auditList"><div class="empty" style="padding:14px 0;">还没有操作记录。</div></div>
+          <button class="btn ghost sm" id="auditClear" style="width:100%;margin-top:10px;">清空记录</button>
+          <div class="note">记录加时、豁免、暂停/恢复、拦截动作，方便回溯“昨天到底给谁加了多少”。</div>
         </div>
 
         <div class="card">
@@ -395,8 +434,17 @@
     var c=null;
     try{ c=JSON.parse(lsGet(CFG_KEY)); }catch(e){}
     if(!c) c = { password:'1234', managedApps:[] };
+    // 旧版本配置自动补齐新字段（不破坏已有数据）
     if(!c.managedApps) c.managedApps=[];
-    if(!c.policy) c.policy='block';          // 默认：只弹拦截页，不锁屏
+    if(!c.policy) c.policy='block';
+    if(typeof c.weekendSplit!=='boolean') c.weekendSplit=false;
+    if(typeof c.totalLimit!=='number') c.totalLimit=0;
+    if(!c.curfew) c.curfew={on:false,start:'22:00',end:'07:00'};
+    if(typeof c.notifyBefore!=='number') c.notifyBefore=5;
+    c.managedApps.forEach(function(a){
+      if(typeof a.limit!=='number'||a.limit<1) a.limit=30;
+      if(typeof a.limitWe!=='number'||a.limitWe<1) a.limitWe=a.limit;
+    });
     return c;
   }
   function saveCfg(){ lsSet(CFG_KEY, JSON.stringify(cfg)); }
@@ -421,7 +469,25 @@
     if(!NATIVE) return PREVIEW_BONUS[pkg]||0;
     try{ return GameBridge.getBonus(pkg); }catch(e){ return 0; }
   }
-  function effLimit(a){ return a.limit + bonusMin(a.pkg); }
+  /** 今天该用哪套基准限额（工作日 / 周末） */
+  function baseLimit(a){
+    if(cfg.weekendSplit && guardState && guardState.weekend){
+      return (typeof a.limitWe==='number'&&a.limitWe>0)? a.limitWe : a.limit;
+    }
+    return a.limit;
+  }
+  /** 有效限额 = 当日基准 + 今日加时 */
+  function effLimit(a){ return baseLimit(a) + bonusMin(a.pkg); }
+  function hhmm2min(s){
+    var m=/^(\d{1,2}):(\d{2})$/.exec(String(s||''));
+    if(!m) return 0;
+    return Math.min(23,parseInt(m[1],10))*60 + Math.min(59,parseInt(m[2],10));
+  }
+  function min2hhmm(v){
+    v=Math.max(0,Math.min(1439,v|0));
+    var h=Math.floor(v/60), m=v%60;
+    return (h<10?'0':'')+h+':'+(m<10?'0':'')+m;
+  }
 
   function doPause(m){
     if(!NATIVE){ toast('网页预览不支持真拦截'); return; }
@@ -453,6 +519,11 @@
       t.textContent='管控已暂停'+(g.pauseRemain>0?'，还剩 '+g.pauseRemain+' 分钟':'（无限期）');
       btn.textContent='恢复';
       btn.onclick=doResume;
+    } else if(g.curfew){
+      bar.className='guardbar paused';
+      t.textContent='免打扰时段生效中，受管应用已拦截';
+      btn.textContent='暂停 30 分钟';
+      btn.onclick=function(){ doPause(30); };
     } else {
       bar.className='guardbar';
       t.textContent='正在管控 '+cfg.managedApps.length+' 个应用';
@@ -502,10 +573,22 @@
   }
   function usageMin(pkg, map){ return Math.round(((map&&map[pkg])||0)/60000); }
 
-  /* ---------- 推送管控配置到原生 ---------- */
+  /* ---------- 推送完整管控配置到原生 ---------- */
   function pushManaged(){
     if(!NATIVE) return;
-    try{ GameBridge.setManagedApps(JSON.stringify(cfg.managedApps.map(function(a){return {pkg:a.pkg,limit:a.limit};}))); }catch(e){}
+    var apps=cfg.managedApps.map(function(a){
+      var we = cfg.weekendSplit ? ((a.limitWe>0)?a.limitWe:a.limit) : a.limit;
+      return {pkg:a.pkg, wd:a.limit, we:we};
+    });
+    var payload={
+      apps: apps,
+      total: cfg.totalLimit||0,
+      curfewOn: !!(cfg.curfew&&cfg.curfew.on),
+      curfewStart: hhmm2min(cfg.curfew&&cfg.curfew.start),
+      curfewEnd: hhmm2min(cfg.curfew&&cfg.curfew.end),
+      notify: cfg.notifyBefore||0
+    };
+    try{ GameBridge.setManagedApps(JSON.stringify(payload)); }catch(e){}
     try{ GameBridge.setPolicy(cfg.policy||'block'); }catch(e){}
   }
 
@@ -529,6 +612,20 @@
     else if(g.paused){ badge.textContent='已暂停'; badge.className='badge warn'; }
     else if(over){ badge.textContent='有应用超限'; badge.className='badge lock'; }
     else { badge.textContent='管控中'; badge.className='badge ok'; }
+
+    // 总时长 / 免打扰 的补充说明
+    var el=document.getElementById('ovTotal');
+    if(el){
+      var parts=[];
+      if(cfg.totalLimit>0){
+        parts.push('每日总时长：'+(g.totalUsed||0)+' / '+cfg.totalLimit+' 分');
+      }
+      if(cfg.curfew&&cfg.curfew.on){
+        parts.push('免打扰时段 '+cfg.curfew.start+'–'+cfg.curfew.end+(g.curfew?'（已生效）':''));
+      }
+      if(cfg.weekendSplit){ parts.push(g.weekend?'今天是周末限额':'今天是工作日限额'); }
+      el.textContent=parts.join('　·　');
+    }
   }
 
   /* ---------- 今日真实使用排行 ---------- */
@@ -591,7 +688,6 @@
       if(!showSystem && a.sys) return;
       if(q && a.name.toLowerCase().indexOf(q)<0 && a.pkg.toLowerCase().indexOf(q)<0) return;
       var mi=managedIndex(a.pkg), on=mi>=0;
-      var limit= on? cfg.managedApps[mi].limit : 30;
       var used= usageMin(a.pkg, map);
       var color=AV_COLORS[(a.name.charCodeAt(0)+idx)%AV_COLORS.length];
       html+='<div class="approw">'
@@ -600,25 +696,39 @@
         +(on?'<div class="u">今日真实已用 '+used+' 分</div>':'')
         +'</div>'
         +'<div class="right">'
-        +(on?'<div class="lim"><input type="number" min="1" value="'+limit+'" onchange="onLimitChange(\''+esc(a.pkg)+'\',this.value)"> 分/天</div>':'')
+        +(on? limitInputs(cfg.managedApps[mi]) : '')
         +'<div class="toggle'+(on?' on':'')+'" data-pkg="'+esc(a.pkg)+'" data-name="'+esc(a.name)+'" onclick="onToggle(this)"><div class="knob"></div></div>'
         +'</div></div>';
     });
     box.innerHTML= html || '<div class="empty">无匹配应用。</div>';
   }
+
+  function limitInputs(a){
+    var h='<div class="lim"><span>工作日</span><input type="number" min="1" value="'+a.limit+'" onchange="onLimitChange(\''+esc(a.pkg)+'\',\'wd\',this.value)">分</div>';
+    if(cfg.weekendSplit){
+      h+='<div class="lim"><span>周末</span><input type="number" min="1" value="'+(a.limitWe||a.limit)+'" onchange="onLimitChange(\''+esc(a.pkg)+'\',\'we\',this.value)">分</div>';
+    }
+    return h;
+  }
   window.onToggle=function(el){
     var pkg=el.getAttribute('data-pkg'), name=el.getAttribute('data-name');
     var mi=managedIndex(pkg);
     if(mi>=0){ cfg.managedApps.splice(mi,1); }
-    else { cfg.managedApps.push({pkg:pkg,name:name,limit:30}); }
+    else {
+      var def=parseInt((document.getElementById('batchLimit')||{}).value,10);
+      if(isNaN(def)||def<1) def=30;
+      cfg.managedApps.push({pkg:pkg,name:name,limit:def,limitWe:def});
+    }
     saveCfg(); pushManaged();
-    renderAppList(); renderOverview(); renderStats();
+    renderAppList(); renderOverview(); renderStats(); refreshGuardBar();
   };
-  window.onLimitChange=function(pkg,val){
+  window.onLimitChange=function(pkg,which,val){
     var mi=managedIndex(pkg); if(mi<0) return;
     var v=parseInt(val,10); if(isNaN(v)||v<1) v=1;
-    cfg.managedApps[mi].limit=v; saveCfg(); pushManaged();
-    renderOverview(); renderStats();
+    if(which==='we'){ cfg.managedApps[mi].limitWe=v; }
+    else { cfg.managedApps[mi].limit=v; }
+    saveCfg(); pushManaged();
+    renderOverview(); renderStats(); refreshGuardBar();
   };
   document.getElementById('appSearch').addEventListener('input', renderAppList);
   document.getElementById('sysToggle').addEventListener('change', function(){ showSystem=this.checked; renderAppList(); });
@@ -693,6 +803,7 @@
     if(NATIVE){ try{ fg=GameBridge.getForegroundPackage(); }catch(e){ fg=''; } }
     var playingName='—';
     if(fg){ for(var i=0;i<cfg.managedApps.length;i++){ if(cfg.managedApps[i].pkg===fg){ playingName='正在使用：'+cfg.managedApps[i].name; break; } } }
+    if(readGuard().curfew) playingName='现在是免打扰时段，先休息一下';
     document.getElementById('kidPlaying').textContent=playingName;
 
     // 注意：这里**不再**自动弹全屏遮罩。
@@ -748,7 +859,7 @@
       if(t.dataset.page==='apps') loadApps();
       if(t.dataset.page==='overview'){ renderOverview(); renderRank(); }
       if(t.dataset.page==='stats') renderStats();
-      if(t.dataset.page==='me') refreshPermStates();
+      if(t.dataset.page==='me'){ refreshPermStates(); renderAudit(); }
     };
   });
 
@@ -783,7 +894,7 @@
     if(cfg.managedApps.length===0){ alert('还没有选择任何受管控应用'); return; }
     var v=parseInt(document.getElementById('batchLimit').value,10);
     if(isNaN(v)||v<1) v=1;
-    cfg.managedApps.forEach(function(a){ a.limit=v; });
+    cfg.managedApps.forEach(function(a){ a.limit=v; a.limitWe=v; });
     saveCfg(); pushManaged();
     renderAppList(); renderOverview(); renderStats(); refreshGuardBar();
     toast('已把 '+cfg.managedApps.length+' 个应用统一设为每天 '+v+' 分钟');
@@ -822,6 +933,64 @@
   }
   bindPolicyRadios();
 
+  /* ---------- 额度与时段 ---------- */
+  function bindQuotaSettings(){
+    var ws=document.getElementById('weekendSplit');
+    var tl=document.getElementById('totalLimit');
+    var co=document.getElementById('curfewOn');
+    var cs=document.getElementById('curfewStart');
+    var ce=document.getElementById('curfewEnd');
+    var nb=document.getElementById('notifyBefore');
+    if(!ws||!tl||!co) return;
+
+    ws.checked = !!cfg.weekendSplit;
+    tl.value = cfg.totalLimit||0;
+    co.checked = !!(cfg.curfew&&cfg.curfew.on);
+    cs.value = (cfg.curfew&&cfg.curfew.start)||'22:00';
+    ce.value = (cfg.curfew&&cfg.curfew.end)||'07:00';
+    nb.value = (typeof cfg.notifyBefore==='number')?cfg.notifyBefore:5;
+
+    ws.onchange=function(){ cfg.weekendSplit=this.checked; saveCfg(); pushManaged(); renderAppList(); renderStats(); };
+    tl.onchange=function(){ var v=parseInt(this.value,10); if(isNaN(v)||v<0) v=0; cfg.totalLimit=v; saveCfg(); pushManaged(); renderOverview(); refreshGuardBar(); };
+    co.onchange=function(){ cfg.curfew.on=this.checked; saveCfg(); pushManaged(); refreshGuardBar(); toast(this.checked?'免打扰时段已开启':'免打扰时段已关闭'); };
+    cs.onchange=function(){ cfg.curfew.start=this.value||'22:00'; saveCfg(); pushManaged(); };
+    ce.onchange=function(){ cfg.curfew.end=this.value||'07:00'; saveCfg(); pushManaged(); };
+    nb.onchange=function(){ var v=parseInt(this.value,10); if(isNaN(v)||v<0) v=0; if(v>60) v=60; this.value=v; cfg.notifyBefore=v; saveCfg(); pushManaged(); };
+  }
+  bindQuotaSettings();
+
+  /* ---------- 操作记录 ---------- */
+  var AUDIT_LABEL={bonus:'加时',exempt:'豁免',pause:'暂停管控',resume:'恢复管控',block:'触发拦截'};
+  function appName(pkg){
+    for(var i=0;i<cfg.managedApps.length;i++) if(cfg.managedApps[i].pkg===pkg) return cfg.managedApps[i].name;
+    for(var j=0;j<allApps.length;j++) if(allApps[j].pkg===pkg) return allApps[j].name;
+    return pkg;
+  }
+  function renderAudit(){
+    var box=document.getElementById('auditList'); if(!box) return;
+    if(!NATIVE){ box.innerHTML='<div class="empty" style="padding:14px 0;">网页预览没有操作记录。</div>'; return; }
+    var arr=[];
+    try{ arr=JSON.parse(GameBridge.getAuditLog()); }catch(e){ arr=[]; }
+    if(!arr.length){ box.innerHTML='<div class="empty" style="padding:14px 0;">还没有操作记录。</div>'; return; }
+    var html='';
+    arr.forEach(function(it){
+      var d=new Date(it.t||0);
+      var hm=(d.getMonth()+1)+'/'+d.getDate()+' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+      var label=AUDIT_LABEL[it.type]||it.type;
+      var name=it.pkg? appName(it.pkg) : '';
+      var detail=(it.type==='bonus'||it.type==='exempt')?(' '+(it.min||0)+' 分'):'';
+      html+='<div class="au-row"><span class="au-time">'+hm+'</span>'
+        +'<span class="au-txt"><span class="au-type">'+label+'</span>'
+        +(name?(' · '+esc(name)):'')+detail+'</span></div>';
+    });
+    box.innerHTML=html;
+  }
+  document.getElementById('auditClear').onclick=function(){
+    if(NATIVE){ try{ GameBridge.clearAuditLog(); }catch(e){} }
+    renderAudit();
+    toast('操作记录已清空');
+  };
+
   /* ---------- 工具 ---------- */
   function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 
@@ -842,7 +1011,7 @@
       hideLock();
       refreshBanners(); refreshPermStates(); refreshGuardBar();
       if(mode==='child'){ renderKid(); }
-      else { renderOverview(); renderStats(); }
+      else { renderOverview(); renderRank(); renderStats(); renderAudit(); }
       pushManaged();
     }catch(e){}
   };

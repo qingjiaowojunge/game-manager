@@ -13,56 +13,22 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
-import org.json.JSONArray
 
 /**
  * 前台监控服务。
  *
- * 与上一版的根本区别（上一版是"一碰就锁、界面自动退出"的元凶）：
- * - 只对**真正处于前台**的受管控应用动作，本应用/桌面/系统界面永不触发；
- * - 默认只拉全屏拦截页，不锁屏；锁屏需要家长在设置里显式开启；
- * - 判定与冷却统一走 Guard，同一应用 90 秒内不重复；
- * - 家长暂停期间完全不动手。
+ * 职责只有一个：每 10 秒看一眼"此刻在前台的应用"，把判断交给 Guard，处置交给 Enforcer。
+ * 服务本身不做任何规则判断，也不感知限额数字——这样规则只有一处，不会两套逻辑打架。
+ *
+ * 附带一件事：在"剩余 N 分钟"时发一次提醒通知（每个应用每天一次）。
  */
 class MonitorService : Service() {
 
     companion object {
-        private const val PREF = "gm_monitor"
-        private const val KEY = "managed_apps"
-
-        /** pkg -> 每日限额(分钟)，基准值，不含今日加时 */
-        @Volatile var managedApps: MutableMap<String, Int> = HashMap()
-
-        private fun parse(json: String): HashMap<String, Int> {
-            val map = HashMap<String, Int>()
-            try {
-                val arr = JSONArray(json)
-                for (i in 0 until arr.length()) {
-                    val o = arr.getJSONObject(i)
-                    val pkg = o.optString("pkg")
-                    val limit = o.optInt("limit", 0)
-                    if (pkg.isNotEmpty() && limit > 0) map[pkg] = limit
-                }
-            } catch (e: Exception) { }
-            return map
-        }
-
-        fun setManagedApps(ctx: Context, json: String) {
-            managedApps = parse(json)
-            try {
-                ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE)
-                    .edit().putString(KEY, json).apply()
-            } catch (e: Exception) { }
-        }
-
-        fun restore(ctx: Context) {
-            if (managedApps.isNotEmpty()) return
-            try {
-                val json = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE)
-                    .getString(KEY, "") ?: ""
-                if (json.isNotEmpty()) managedApps = parse(json)
-            } catch (e: Exception) { }
-        }
+        private const val CHANNEL = "game_monitor"
+        private const val NOTIF_ID_SERVICE = 1
+        private const val NOTIF_ID_BLOCK = 2
+        private const val NOTIF_ID_WARN = 3
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -70,22 +36,18 @@ class MonitorService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        try {
-            restore(this)
-            Guard.init(this)
-        } catch (e: Throwable) { }
+        try { Guard.init(this) } catch (e: Throwable) { }
 
-        // 前台服务类型在部分 ROM 上会抛异常；起不来就自动退出，绝不连累主界面
         val started = try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(1, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+                startForeground(NOTIF_ID_SERVICE, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
             } else {
-                startForeground(1, buildNotification())
+                startForeground(NOTIF_ID_SERVICE, buildNotification())
             }
             true
         } catch (e: Throwable) {
             try {
-                startForeground(1, buildNotification())
+                startForeground(NOTIF_ID_SERVICE, buildNotification())
                 true
             } catch (e2: Throwable) {
                 false
@@ -99,14 +61,12 @@ class MonitorService : Service() {
         loop()
     }
 
-    /** 每 10 秒检查一次；只关心"此刻在前台的那个应用"。
-     *  查询用量要跨进程，放后台线程跑，避免卡住界面。 */
     private fun loop() {
         handler.postDelayed({
             worker.execute {
                 try {
                     tick()
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     // 任何异常都不许让监控循环断掉
                 }
             }
@@ -116,39 +76,76 @@ class MonitorService : Service() {
 
     private fun tick() {
         if (Guard.isPausedNow()) return
-        if (managedApps.isEmpty()) return
+        if (!Guard.hasRules()) return
         if (!UsageUtil.hasUsagePermission(this)) return
 
         val fg = UsageUtil.foregroundPackage(this)
         if (fg.isEmpty()) return
+
         // 家长打开了本应用 → 立刻撤掉拦截层，绝不能让家长自己被挡住
         if (fg == packageName) {
             OverlayBlocker.hide()
             return
         }
-        // 非受管控应用、桌面、系统界面 → Guard 内部直接跳过
+
+        // 剩余时间提醒（每应用每天一次）
+        try {
+            if (Guard.shouldNotifyRemaining(this, fg)) notifyRemaining(fg)
+        } catch (e: Throwable) { }
+
         if (!Guard.shouldHandle(this, fg)) return
-        // 冷却票据已由 Guard 占用，执行统一交给 Enforcer（与无障碍链路同一套动作）
         Enforcer.enforce(this, fg)
     }
 
-    private fun buildNotification(): Notification {
-        val ch = "game_monitor"
+    private fun ensureChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            getSystemService(NotificationManager::class.java)
-                .createNotificationChannel(
-                    NotificationChannel(ch, "游戏计时", NotificationManager.IMPORTANCE_LOW)
+            val nm = getSystemService(NotificationManager::class.java) ?: return
+            nm.createNotificationChannel(
+                NotificationChannel(CHANNEL, "游戏计时", NotificationManager.IMPORTANCE_LOW)
+            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val warn = NotificationChannel(
+                    "game_warn", "时间提醒", NotificationManager.IMPORTANCE_HIGH
                 )
+                warn.description = "剩余时间不足时提醒"
+                nm.createNotificationChannel(warn)
+            }
         }
+    }
+
+    private fun notifyRemaining(pkg: String) {
+        try {
+            ensureChannel()
+            val name = try {
+                val ai = packageManager.getApplicationInfo(pkg, 0)
+                packageManager.getApplicationLabel(ai).toString()
+            } catch (e: Exception) { pkg }
+            val remain = (Guard.effectiveLimitMinutes(this, pkg) - Guard.usedMinutes(this, pkg)).coerceAtLeast(0)
+            val nm = getSystemService(NotificationManager::class.java) ?: return
+            nm.notify(
+                NOTIF_ID_WARN,
+                NotificationCompat.Builder(this, "game_warn")
+                    .setContentTitle("$name 还能用 $remain 分钟")
+                    .setContentText("到时间会自动拦截，需要更多时间请让家长加时。")
+                    .setSmallIcon(R.drawable.ic_notif)
+                    .setAutoCancel(true)
+                    .build()
+            )
+        } catch (e: Throwable) { }
+    }
+
+    private fun buildNotification(): Notification {
+        ensureChannel()
         val pi = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
         )
         val state = when {
             Guard.isPausedNow() -> "已暂停管控"
-            managedApps.isEmpty() -> "未配置受管控应用"
-            else -> "正在监控 ${managedApps.size} 个应用"
+            !Guard.hasRules() -> "未配置受管控应用"
+            Guard.inCurfew() -> "免打扰时段，已拦截"
+            else -> "正在监控 ${Guard.ruleCount()} 个应用"
         }
-        return NotificationCompat.Builder(this, ch)
+        return NotificationCompat.Builder(this, CHANNEL)
             .setContentTitle("游戏管理软件")
             .setContentText(state)
             .setSmallIcon(R.drawable.ic_notif)
@@ -161,7 +158,7 @@ class MonitorService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
-        try { worker.shutdownNow() } catch (e: Exception) { }
+        try { worker.shutdownNow() } catch (e: Throwable) { }
         super.onDestroy()
     }
 }

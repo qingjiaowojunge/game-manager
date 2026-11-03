@@ -28,7 +28,6 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
 
         // 每一步都独立兜底：任何一步失败都不影响界面显示
-        try { MonitorService.restore(this) } catch (e: Throwable) { }
         try { Guard.init(this) } catch (e: Throwable) { }
 
         val view = try {
