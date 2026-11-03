@@ -5,7 +5,11 @@ import android.app.Activity
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.KeyEvent
+import android.view.ViewGroup
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -18,6 +22,7 @@ import android.widget.TextView
  * 稳定性要求（针对"一打开就闪退"）：
  * - 所有初始化步骤各自 try/catch，任何一步失败都不许让 Activity 挂掉；
  * - WebView 本身创建失败时，退化成一张能看懂的提示页，而不是白屏或闪退；
+ * - **渲染进程被系统回收时不跟着退出**，就地重建页面（见 onRenderProcessGone）；
  * - 全局异常由 App 的 CrashHandler 落盘，下次启动能在「我的 → 崩溃日志」里看到。
  */
 class MainActivity : Activity() {
@@ -30,21 +35,28 @@ class MainActivity : Activity() {
         // 每一步都独立兜底：任何一步失败都不影响界面显示
         try { Guard.init(this) } catch (e: Throwable) { }
 
+        attachWeb()
+        askNotificationPermission()
+    }
+
+    /**
+     * 创建并挂上 WebView。
+     * 首次启动和"渲染进程崩了之后重建"共用这一条路径，避免两套逻辑算出两种行为。
+     */
+    private fun attachWeb() {
         val view = try {
             buildWebView()
         } catch (e: Throwable) {
             null
         }
-
         if (view == null) {
-            setContentView(fallbackView(e = null))
-        } else {
-            web = view
-            setContentView(view)
-            loadApp(view)
+            web = null
+            try { setContentView(fallbackView(null)) } catch (e: Throwable) { }
+            return
         }
-
-        askNotificationPermission()
+        web = view
+        try { setContentView(view) } catch (e: Throwable) { }
+        loadApp(view)
     }
 
     private fun buildWebView(): WebView {
@@ -70,7 +82,32 @@ class MainActivity : Activity() {
             mediaPlaybackRequiresUserGesture = false
         }
 
-        v.webViewClient = WebViewClient()
+        v.webViewClient = object : WebViewClient() {
+            /**
+             * 渲染进程被系统回收（内存紧张 / 被厂商 ROM 清理）时的默认行为是
+             * **连整个应用一起杀掉**——这正是"一打开就闪退"最难查的一种，因为
+             * 它不是 Java 异常，CrashHandler 抓不到。
+             *
+             * 返回 true = 我自己处理：拆掉这个坏掉的 WebView，换个新的重建页面，
+             * 应用继续活着。
+             */
+            override fun onRenderProcessGone(
+                view: WebView?,
+                detail: RenderProcessGoneDetail?
+            ): Boolean {
+                try {
+                    (view?.parent as? ViewGroup)?.removeView(view)
+                    view?.destroy()
+                } catch (e: Throwable) { }
+                if (web === view) web = null
+                // 不在回调里直接改视图树，挪到下一轮消息再重建
+                Handler(Looper.getMainLooper()).post {
+                    try { attachWeb() } catch (e: Throwable) { }
+                }
+                return true
+            }
+        }
+
         // 没有 WebChromeClient 时 JS 的 alert/prompt 会静默失效，必须设置
         v.webChromeClient = WebChromeClient()
         v.addJavascriptInterface(GameBridge(this), "GameBridge")
@@ -81,7 +118,7 @@ class MainActivity : Activity() {
         try {
             v.loadUrl("file:///android_asset/index.html")
         } catch (e: Throwable) {
-            setContentView(fallbackView(e))
+            try { setContentView(fallbackView(e)) } catch (err: Throwable) { }
         }
     }
 
@@ -128,6 +165,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        // 家长打开本应用时立刻撤掉拦截层，绝不挡住自己
         try { OverlayBlocker.hide() } catch (e: Throwable) { }
         val v = web ?: return
         try { v.onResume() } catch (e: Throwable) { }

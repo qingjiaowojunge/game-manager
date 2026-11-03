@@ -48,6 +48,14 @@
 
 同时把**所有** `@JavascriptInterface` 方法都套上异常护栏（`safe` / `safeUnit`）——桥接方法抛出的异常会打到 WebView 的 JavaBridge 线程并**直接杀掉应用**，这是"点一下就闪退"的典型死法。
 
+## v2.2：堵掉最后一种"一打开就闪退"
+
+`MainActivity.onRenderProcessGone()`。
+
+WebView 的渲染进程是独立进程。内存紧张、或厂商 ROM 清理后台时，系统会**直接杀掉渲染进程，并默认连宿主应用一起杀掉**。这种"闪退"不是 Java 异常，`CrashHandler` 抓不到，日志里什么都没有——是最难查的一种。
+
+现在改成：拆掉坏掉的 WebView，在主线程消息队列里**重建一个新 WebView 并重新加载页面**，返回 `true` 告诉系统"我自己处理"，应用继续活着。首次启动和重建走的是同一条 `attachWeb()` 路径，不会出现两套逻辑。
+
 ## 上一版（v1）的下载地址
 
 - 手机下载页：<https://qingjiaowojunge.github.io/game-manager/>
