@@ -70,12 +70,31 @@ class MonitorService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        restore(this)
-        Guard.init(this)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(1, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else {
-            startForeground(1, buildNotification())
+        try {
+            restore(this)
+            Guard.init(this)
+        } catch (e: Throwable) { }
+
+        // 前台服务类型在部分 ROM 上会抛异常；起不来就自动退出，绝不连累主界面
+        val started = try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(1, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            } else {
+                startForeground(1, buildNotification())
+            }
+            true
+        } catch (e: Throwable) {
+            try {
+                startForeground(1, buildNotification())
+                true
+            } catch (e2: Throwable) {
+                false
+            }
+        }
+
+        if (!started) {
+            stopSelf()
+            return
         }
         loop()
     }

@@ -6,34 +6,55 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
-import android.view.View
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.TextView
 
 /**
  * 应用唯一入口：一个全屏 WebView 承载 assets/index.html。
- * HTML/JS/CSS 是应用本体；需要系统能力时通过 window.GameBridge 调到 GameBridge。
+ *
+ * 稳定性要求（针对"一打开就闪退"）：
+ * - 所有初始化步骤各自 try/catch，任何一步失败都不许让 Activity 挂掉；
+ * - WebView 本身创建失败时，退化成一张能看懂的提示页，而不是白屏或闪退；
+ * - 全局异常由 App 的 CrashHandler 落盘，下次启动能在「我的 → 崩溃日志」里看到。
  */
 class MainActivity : Activity() {
 
-    private lateinit var web: WebView
+    private var web: WebView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 先把管控状态装好：限额清单、暂停态、执行策略、今日加时
-        MonitorService.restore(this)
-        Guard.init(this)
+        // 每一步都独立兜底：任何一步失败都不影响界面显示
+        try { MonitorService.restore(this) } catch (e: Throwable) { }
+        try { Guard.init(this) } catch (e: Throwable) { }
 
-        web = WebView(this)
-        web.setBackgroundColor(0xFFF5F6FA.toInt())
-        setContentView(web)
+        val view = try {
+            buildWebView()
+        } catch (e: Throwable) {
+            null
+        }
 
-        web.settings.apply {
+        if (view == null) {
+            setContentView(fallbackView(e = null))
+        } else {
+            web = view
+            setContentView(view)
+            loadApp(view)
+        }
+
+        askNotificationPermission()
+    }
+
+    private fun buildWebView(): WebView {
+        val v = WebView(this)
+        v.setBackgroundColor(0xFFF5F6FA.toInt())
+
+        v.settings.apply {
             javaScriptEnabled = true
-            domStorageEnabled = true            // localStorage：保存限额配置
+            domStorageEnabled = true
             databaseEnabled = true
             allowFileAccess = true
             allowContentAccess = true
@@ -50,51 +71,87 @@ class MainActivity : Activity() {
             mediaPlaybackRequiresUserGesture = false
         }
 
-        web.webViewClient = WebViewClient()
-        web.webChromeClient = WebChromeClient()
+        v.webViewClient = WebViewClient()
+        // 没有 WebChromeClient 时 JS 的 alert/prompt 会静默失效，必须设置
+        v.webChromeClient = WebChromeClient()
+        v.addJavascriptInterface(GameBridge(this), "GameBridge")
+        return v
+    }
 
-        // 原生能力注入：JS 里用 window.GameBridge.xxx()
-        web.addJavascriptInterface(GameBridge(this), "GameBridge")
-
-        web.loadUrl("file:///android_asset/index.html")
-
-        // Android 13+ 通知权限（前台服务通知需要）
-        if (Build.VERSION.SDK_INT >= 33 &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+    private fun loadApp(v: WebView) {
+        try {
+            v.loadUrl("file:///android_asset/index.html")
+        } catch (e: Throwable) {
+            setContentView(fallbackView(e))
         }
     }
 
-    /** 返回键：先让网页处理（网页可返回上一屏），网页不处理则退出 */
+    /** 兜底页面：宁可显示一段能看懂的话，也不要白屏或闪退 */
+    private fun fallbackView(e: Throwable?): TextView {
+        val crash = try { App.readCrash(this) } catch (err: Throwable) { "" }
+        val sb = StringBuilder()
+        sb.append("界面加载失败\n\n")
+        sb.append("应用本体没能启动。可以先把下面这段发给开发者。\n\n")
+        if (crash.isNotEmpty()) sb.append("上次崩溃记录：\n").append(crash.take(1200))
+        else if (e != null) sb.append("错误：").append(e.toString())
+        else sb.append("未捕获到具体原因。")
+
+        return TextView(this).apply {
+            text = sb.toString()
+            textSize = 13f
+            setPadding(48, 96, 48, 48)
+            setTextColor(0xFF0F172A.toInt())
+            setBackgroundColor(0xFFF5F6FA.toInt())
+        }
+    }
+
+    private fun askNotificationPermission() {
+        try {
+            if (Build.VERSION.SDK_INT >= 33 &&
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+            }
+        } catch (e: Throwable) { }
+    }
+
+    /** 返回键：网页能回退就回退，否则退出 */
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK && this::web.isInitialized && web.canGoBack()) {
-            web.goBack()
-            return true
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            val v = web
+            if (v != null && v.canGoBack()) {
+                v.goBack()
+                return true
+            }
         }
         return super.onKeyDown(keyCode, event)
     }
 
     override fun onResume() {
         super.onResume()
-        // 家长进到本应用，拦截层必须让开
-        OverlayBlocker.hide()
-        if (this::web.isInitialized) web.onResume()
-        // 每次回到前台，通知网页刷新真实数据（时长会变、授权状态可能刚改）
-        if (this::web.isInitialized) {
-            web.post { web.evaluateJavascript("window.__onNativeResume && window.__onNativeResume()", null) }
-        }
+        try { OverlayBlocker.hide() } catch (e: Throwable) { }
+        val v = web ?: return
+        try { v.onResume() } catch (e: Throwable) { }
+        try {
+            v.post {
+                try {
+                    v.evaluateJavascript("window.__onNativeResume && window.__onNativeResume()", null)
+                } catch (e: Throwable) { }
+            }
+        } catch (e: Throwable) { }
     }
 
     override fun onPause() {
-        if (this::web.isInitialized) web.onPause()
+        try { web?.onPause() } catch (e: Throwable) { }
         super.onPause()
     }
 
     override fun onDestroy() {
-        if (this::web.isInitialized) {
-            web.removeJavascriptInterface("GameBridge")
-            web.destroy()
+        val v = web
+        web = null
+        if (v != null) {
+            try { v.removeJavascriptInterface("GameBridge") } catch (e: Throwable) { }
+            try { v.destroy() } catch (e: Throwable) { }
         }
         super.onDestroy()
     }

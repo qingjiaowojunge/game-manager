@@ -69,6 +69,21 @@
   /* 应用列表 */
   .search{width:100%;padding:12px 14px 12px 40px;border:1px solid var(--border);border-radius:12px;font-size:14px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4-4'/%3E%3C/svg%3E") no-repeat 13px center;background-size:18px;}
   .filterrow{display:flex;justify-content:flex-end;margin:10px 0 2px;}
+  .batchrow{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);
+    background:#f8fafc;border:1px solid var(--border);border-radius:11px;padding:9px 11px;margin:10px 0 4px;}
+  .batchrow input{width:56px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-size:13px;text-align:center;background:#fff;}
+  .batchrow .btn{margin-left:auto;}
+  /* 排行 */
+  .rk-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);}
+  .rk-row:last-child{border-bottom:none;}
+  .rk-idx{width:20px;font-size:12px;font-weight:800;color:var(--muted);flex:none;text-align:center;}
+  .rk-name{flex:1;min-width:0;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .rk-name .tag{font-size:10.5px;font-weight:700;color:var(--primary);background:var(--primary-50);border-radius:5px;padding:1px 5px;margin-left:6px;}
+  .rk-val{font-size:13px;font-weight:700;color:var(--primary);flex:none;}
+  /* 崩溃日志 */
+  .crashbox{background:#0f172a;color:#e2e8f0;font-size:11px;line-height:1.55;border-radius:10px;
+    padding:12px;max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:10px 0 0;
+    font-family:ui-monospace,Menlo,Consolas,monospace;}
   .chk{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);cursor:pointer;}
   .chk input{width:16px;height:16px;accent-color:var(--primary);}
   .approw{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);}
@@ -207,9 +222,14 @@
             </div>
           </div>
         </div>
+        <div class="card" id="rankCard">
+          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V11M10 20V4M16 20V14M22 20V8"/></svg>今天都在用什么</h3>
+          <div id="rankList"><div class="empty" style="padding:16px 0;">正在读取真实用量…</div></div>
+          <div class="note">包含<b>未纳入管控</b>的应用，用来判断到底该管哪一个。</div>
+        </div>
         <div class="card">
           <button class="btn red" id="lockBtn">一键锁机</button>
-          <div class="note">超额后系统按真实用量自动锁屏 / 退回桌面（需设备管理员 + 用量权限）。</div>
+          <div class="note">超额后系统按真实用量自动处理（默认只弹拦截页，不锁屏）。</div>
         </div>
       </div>
 
@@ -220,6 +240,12 @@
           <div class="note">以下为手机<b>真实已装应用</b>。搜索找到要管控的 App，开启开关即纳入管控并设置每日分钟数。</div>
           <input class="search" id="appSearch" placeholder="搜索应用名…">
           <div class="filterrow"><label class="chk"><input type="checkbox" id="sysToggle"> 显示系统应用</label></div>
+          <div class="batchrow">
+            <span>批量：已选应用统一设为</span>
+            <input type="number" min="1" id="batchLimit" value="30">
+            <span>分/天</span>
+            <button class="btn ghost sm" id="batchApply">应用</button>
+          </div>
           <div id="appList"></div>
           <div id="appEmpty" class="empty hidden">
             <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
@@ -265,6 +291,14 @@
           <label class="optrow"><input type="radio" name="policy" value="lock">
             <span><b>拦截页 + 直接锁屏</b><div class="od">最强制，会锁住整台手机。需要设备管理员，且会打断你自己的操作，慎用。</div></span></label>
         </div>
+        <div class="card">
+          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 9v4M12 17v.01"/><path d="M10.3 3.9L2.4 18a1.6 1.6 0 0 0 1.4 2.4h16.4a1.6 1.6 0 0 0 1.4-2.4L13.7 3.9a1.6 1.6 0 0 0-2.8 0z"/></svg>崩溃日志</h3>
+          <div class="note" id="crashHint">如果应用闪退过，这里能看到原因。把内容发给我就能定位。</div>
+          <pre id="crashBox" class="crashbox hidden"></pre>
+          <button class="btn ghost sm" id="crashView" style="width:100%;margin-top:10px;">查看最近一次崩溃</button>
+          <button class="btn ghost sm" id="crashClear" style="width:100%;margin-top:8px;">清除记录</button>
+        </div>
+
         <div class="card">
           <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>暂停 / 重置</h3>
           <button class="btn ghost sm" id="pause30" style="width:100%;">暂停管控 30 分钟</button>
@@ -317,6 +351,17 @@
 <script>
 (function(){
   "use strict";
+
+  /* ---------- 脚本异常兜底：宁可显示一行错误，也不要白屏 ---------- */
+  var lastJsError='';
+  window.onerror=function(m,src,line){
+    lastJsError=String(m||'')+' @ '+String(src||'').split('/').pop()+':'+String(line||0);
+    try{
+      var pb=document.getElementById('permBanner');
+      if(pb){ pb.classList.remove('hidden'); pb.textContent='界面脚本出错：'+lastJsError; }
+    }catch(e){}
+    return false;
+  };
   var CFG_KEY='gm_config_v2', MODE_KEY='gm_mode';
   var NATIVE = (typeof GameBridge !== 'undefined');
   var isPreview = !NATIVE;
@@ -416,10 +461,6 @@
     }
   }
 
-  /* ---------- 时钟 ---------- */
-  function tickClock(){}
-  setInterval(function(){ var n=new Date(),h=n.getHours(),m=(n.getMinutes()<10?'0':'')+n.getMinutes(); var e=document.getElementById('sbTime'); if(e) e.textContent=h+':'+m; }, 1000);
-
   /* ---------- 横幅 ---------- */
   function refreshBanners(){
     var pb=document.getElementById('permBanner'), pv=document.getElementById('prevBanner');
@@ -488,6 +529,34 @@
     else if(g.paused){ badge.textContent='已暂停'; badge.className='badge warn'; }
     else if(over){ badge.textContent='有应用超限'; badge.className='badge lock'; }
     else { badge.textContent='管控中'; badge.className='badge ok'; }
+  }
+
+  /* ---------- 今日真实使用排行 ---------- */
+  function renderRank(){
+    var box=document.getElementById('rankList'); if(!box) return;
+    if(isPreview){
+      var arr=[];
+      for(var k in SAMPLE_USAGE) arr.push({pkg:k, name:(function(p){for(var i=0;i<SAMPLE_APPS.length;i++)if(SAMPLE_APPS[i].pkg===p)return SAMPLE_APPS[i].name; return p;})(k), ms:SAMPLE_USAGE[k]});
+      arr.sort(function(a,b){return b.ms-a.ms;});
+      box.innerHTML=rankHtml(arr.slice(0,5));
+      return;
+    }
+    if(!NATIVE||!hasUsage()){ box.innerHTML='<div class="empty" style="padding:16px 0;">未授予用量权限，读不到真实使用数据。</div>'; return; }
+    var list=[];
+    try{ list=JSON.parse(GameBridge.getTodayRanking(5)); }catch(e){ list=[]; }
+    box.innerHTML=rankHtml(list);
+  }
+  function rankHtml(list){
+    if(!list||!list.length) return '<div class="empty" style="padding:16px 0;">今天还没有可统计的使用记录。</div>';
+    var html='';
+    list.forEach(function(a,i){
+      var mins=Math.round((a.ms||0)/60000);
+      var managed=managedIndex(a.pkg)>=0;
+      html+='<div class="rk-row"><div class="rk-idx">'+(i+1)+'</div>'
+        +'<div class="rk-name">'+esc(a.name||a.pkg)+(managed?'<span class="tag">管控中</span>':'')+'</div>'
+        +'<div class="rk-val">'+mins+' 分</div></div>';
+    });
+    return html;
   }
 
   /* ---------- 应用列表（真实已装 / 预览示例） ---------- */
@@ -654,7 +723,7 @@
   function showParent(){ mode='parent'; setSeg('parent');
     document.getElementById('parentView').classList.remove('hidden'); document.getElementById('childView').classList.add('hidden');
     hideLock();
-    lsSet(MODE_KEY,'parent'); refreshPermStates(); refreshBanners(); refreshGuardBar(); renderOverview(); renderStats(); }
+    lsSet(MODE_KEY,'parent'); refreshPermStates(); refreshBanners(); refreshGuardBar(); renderOverview(); renderRank(); renderStats(); }
   function showChild(){ mode='child'; setSeg('child');
     document.getElementById('parentView').classList.add('hidden'); document.getElementById('childView').classList.remove('hidden');
     hideLock();
@@ -677,7 +746,7 @@
       document.querySelectorAll('#parentView .page').forEach(function(pg){pg.classList.remove('active');});
       document.getElementById('p-'+t.dataset.page).classList.add('active');
       if(t.dataset.page==='apps') loadApps();
-      if(t.dataset.page==='overview') renderOverview();
+      if(t.dataset.page==='overview'){ renderOverview(); renderRank(); }
       if(t.dataset.page==='stats') renderStats();
       if(t.dataset.page==='me') refreshPermStates();
     };
@@ -709,6 +778,33 @@
     renderAppList(); renderOverview(); renderStats(); renderKid(); refreshGuardBar();
   };
 
+  /* ---------- 批量设置限额 ---------- */
+  document.getElementById('batchApply').onclick=function(){
+    if(cfg.managedApps.length===0){ alert('还没有选择任何受管控应用'); return; }
+    var v=parseInt(document.getElementById('batchLimit').value,10);
+    if(isNaN(v)||v<1) v=1;
+    cfg.managedApps.forEach(function(a){ a.limit=v; });
+    saveCfg(); pushManaged();
+    renderAppList(); renderOverview(); renderStats(); refreshGuardBar();
+    toast('已把 '+cfg.managedApps.length+' 个应用统一设为每天 '+v+' 分钟');
+  };
+
+  /* ---------- 崩溃日志 ---------- */
+  document.getElementById('crashView').onclick=function(){
+    var box=document.getElementById('crashBox');
+    box.classList.remove('hidden');
+    if(!NATIVE){ box.textContent='网页预览模式没有原生崩溃日志。'; return; }
+    var txt='';
+    try{ txt=GameBridge.getLastCrash(); }catch(e){ txt=''; }
+    box.textContent = txt ? txt : '没有崩溃记录。说明上次运行是正常的。';
+  };
+  document.getElementById('crashClear').onclick=function(){
+    if(NATIVE){ try{ GameBridge.clearCrash(); }catch(e){} }
+    var box=document.getElementById('crashBox');
+    box.textContent=''; box.classList.add('hidden');
+    toast('已清除崩溃记录');
+  };
+
   /* ---------- 处理方式（策略）切换 ---------- */
   function bindPolicyRadios(){
     var rs=document.querySelectorAll('input[name="policy"]');
@@ -734,7 +830,7 @@
     if(!document.getElementById('childView').classList.contains('hidden')) renderKid();
     if(document.getElementById('parentView') && !document.getElementById('parentView').classList.contains('hidden')){
       var ap=document.querySelector('#parentView .tab.active');
-      if(ap){ var p=ap.dataset.page; if(p==='overview') renderOverview(); if(p==='stats') renderStats(); if(p==='apps') renderAppList(); }
+      if(ap){ var p=ap.dataset.page; if(p==='overview'){ renderOverview(); renderRank(); } if(p==='stats') renderStats(); if(p==='apps') renderAppList(); }
       refreshPermStates();
     }
     refreshBanners(); refreshGuardBar();

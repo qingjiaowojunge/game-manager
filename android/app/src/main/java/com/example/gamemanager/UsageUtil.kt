@@ -114,6 +114,30 @@ object UsageUtil {
         return JSONArray(list).toString()
     }
 
+    /** 今日真实使用排行（含非受管应用），[{pkg,name,ms}] 按毫秒降序 */
+    fun rankingJson(ctx: Context, limit: Int): String {
+        val arr = JSONArray()
+        val map = queryUsageMap(ctx, dayStartMs(), System.currentTimeMillis())
+        val rows = mutableListOf<Pair<String, Long>>()
+        for ((pkg, ms) in map) if (ms >= 60_000L) rows.add(pkg to ms)
+        rows.sortByDescending { it.second }
+        val pm = ctx.packageManager
+        val n = if (limit > 0) limit else 10
+        for ((pkg, ms) in rows.take(n)) {
+            val name = try {
+                pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+            } catch (e: Exception) {
+                pkg
+            }
+            arr.put(JSONObject().apply {
+                put("pkg", pkg)
+                put("name", name)
+                put("ms", ms)
+            })
+        }
+        return arr.toString()
+    }
+
     /** 某应用最近 days 天每日真实时长（毫秒），返回 JSON 数组（旧→新） */
     fun usageSeries(ctx: Context, pkg: String, days: Int): String {
         val arr = JSONArray()
