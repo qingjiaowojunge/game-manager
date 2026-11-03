@@ -90,6 +90,10 @@ object OverlayBlocker {
 
     private var titleView: TextView? = null
     private var detailView: TextView? = null
+    private var headView: TextView? = null
+    // 专注模式下第一个按钮要变成"结束专注"，所以按钮得留引用才能动态改
+    private var btn1: Button? = null
+    private var btn2: Button? = null
 
     private fun dp(ctx: Context, v: Int): Int =
         (v * ctx.resources.displayMetrics.density + 0.5f).toInt()
@@ -104,12 +108,13 @@ object OverlayBlocker {
             isClickable = true
         }
 
-        box.addView(TextView(ctx).apply {
+        headView = TextView(ctx).apply {
             text = "时间到"
             setTextColor(Color.parseColor("#F87171"))
             textSize = 15f
             gravity = Gravity.CENTER
-        })
+        }
+        box.addView(headView)
 
         titleView = TextView(ctx).apply {
             setTextColor(Color.WHITE)
@@ -128,8 +133,12 @@ object OverlayBlocker {
         }
         box.addView(detailView)
 
-        box.addView(button(ctx, "加时 15 分钟（需家长密码）", "#2563EB") { askPassword(ctx, 15) })
-        box.addView(button(ctx, "加时 30 分钟（需家长密码）", "#2563EB") { askPassword(ctx, 30) })
+        val b1 = button(ctx, "加时 15 分钟（需家长密码）", "#2563EB") { onPrimary(ctx) }
+        btn1 = b1
+        box.addView(b1)
+        val b2 = button(ctx, "加时 30 分钟（需家长密码）", "#2563EB") { askPassword(ctx, 30) }
+        btn2 = b2
+        box.addView(b2)
         box.addView(button(ctx, "回到桌面", "#334155") {
             hide()
             goHome(ctx)
@@ -168,12 +177,61 @@ object OverlayBlocker {
     private fun updateTexts(ctx: Context) {
         main.post {
             val name = appLabel(ctx)
+            if (Guard.focusActive()) {
+                // 专注模式：这不是"时间用完了"，文案必须说清楚，否则家长会以为额度出问题
+                headView?.text = "专注中"
+                titleView?.text = "$name 专注模式中"
+                detailView?.text =
+                    "专注还剩 ${Guard.focusRemainMinutes()} 分钟\n这段时间受管应用一律打开不了，专注结束就恢复。"
+                btn1?.text = "家长：结束专注（需密码）"
+                btn2?.visibility = View.GONE
+                return@post
+            }
+            headView?.text = "时间到"
             titleView?.text = "$name 今日时间已用完"
             val used = Guard.usedMinutes(ctx, currentPkg)
             val limit = Guard.effectiveLimitMinutes(ctx, currentPkg)
             detailView?.text =
                 "已用 $used 分钟 / 限额 $limit 分钟\n请让家长输入密码加时，或先做点别的。"
+            btn1?.text = "加时 15 分钟（需家长密码）"
+            btn2?.visibility = View.VISIBLE
         }
+    }
+
+    /** 第一个按钮分流：专注期里点是"结束专注"，平时是"加时 15 分钟" */
+    private fun onPrimary(ctx: Context) {
+        if (Guard.focusActive()) askEndFocus(ctx) else askPassword(ctx, 15)
+    }
+
+    private fun askEndFocus(ctx: Context) {
+        val input = EditText(ctx).apply {
+            hint = "家长密码"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            setPadding(dp(ctx, 16), dp(ctx, 12), dp(ctx, 16), dp(ctx, 12))
+        }
+        val holder = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(ctx, 20), dp(ctx, 8), dp(ctx, 20), 0)
+        }
+        holder.addView(input)
+
+        val dlg = AlertDialog.Builder(ctx)
+            .setTitle("结束专注模式")
+            .setView(holder)
+            .setPositiveButton("结束专注") { _, _ ->
+                if (Guard.checkParentPassword(ctx, input.text.toString().trim())) {
+                    Guard.stopFocus(ctx)
+                    Guard.clearStrike(currentPkg)
+                    hide()
+                } else {
+                    android.widget.Toast.makeText(ctx, "密码错误", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("继续专注", null)
+            .create()
+
+        dlg.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+        dlg.show()
     }
 
     private fun askPassword(ctx: Context, minutes: Int) {

@@ -43,6 +43,7 @@ object Guard {
     private const val K_AUDIT = "audit_json"
     private const val K_NOTIFY_DAY = "notify_day"
     private const val K_NOTIFY_DONE = "notify_done"
+    private const val K_FOCUS_UNTIL = "focus_until"
 
     private const val COOLDOWN_MS = 90_000L
     private const val AUDIT_MAX = 40
@@ -61,6 +62,8 @@ object Guard {
     @Volatile private var curfewStartMin: Int = 22 * 60
     @Volatile private var curfewEndMin: Int = 7 * 60
     @Volatile private var notifyBeforeMin: Int = 0
+    /** 专注模式结束时间戳（0 = 未开启）。专注期内受管应用一律拦，不看额度。 */
+    @Volatile private var focusUntil: Long = 0L
 
     private val strikes = HashMap<String, Long>()
     private var homePkgs: Set<String> = emptySet()
@@ -83,6 +86,7 @@ object Guard {
             paused = p.getBoolean(K_PAUSED, false)
             pauseUntil = p.getLong(K_PAUSE_UNTIL, 0L)
             policy = p.getString(K_POLICY, POLICY_BLOCK) ?: POLICY_BLOCK
+            focusUntil = p.getLong(K_FOCUS_UNTIL, 0L)
             loadHomePackages(ctx)
             loadRules(p.getString(K_RULES, "") ?: "")
         }
@@ -196,6 +200,35 @@ object Guard {
     fun pauseRemainMinutes(): Int {
         if (!paused || pauseUntil <= 0L) return 0
         val ms = pauseUntil - System.currentTimeMillis()
+        return if (ms <= 0) 0 else (ms / 60_000L).toInt() + 1
+    }
+
+    /* ---------- 专注模式 ---------- */
+
+    /**
+     * 开启专注。与"暂停"相反：暂停是全部不拦，专注是**受管的一律拦**，
+     * 且不占用、也不消耗额度——结束后该用多少还是多少。
+     * 只作用于受管应用，所以不会误锁电话、短信、相机这些没勾选的东西。
+     */
+    fun startFocus(ctx: Context, minutes: Int) {
+        val m = if (minutes <= 0) 45 else minutes
+        focusUntil = System.currentTimeMillis() + m * 60_000L
+        try { prefs(ctx).edit().putLong(K_FOCUS_UNTIL, focusUntil).apply() } catch (e: Exception) { }
+        strikes.clear()
+        audit(ctx, "focus_start", "", m)
+    }
+
+    fun stopFocus(ctx: Context) {
+        focusUntil = 0L
+        try { prefs(ctx).edit().putLong(K_FOCUS_UNTIL, 0L).apply() } catch (e: Exception) { }
+        strikes.clear()
+        audit(ctx, "focus_stop", "", 0)
+    }
+
+    fun focusActive(): Boolean = focusUntil > System.currentTimeMillis()
+
+    fun focusRemainMinutes(): Int {
+        val ms = focusUntil - System.currentTimeMillis()
         return if (ms <= 0) 0 else (ms / 60_000L).toInt() + 1
     }
 
@@ -381,9 +414,12 @@ object Guard {
         return false
     }
 
-    /** 该应用此刻是否应当被拦（单应用超限 / 总时长超限 / 免打扰时段） */
+    /** 该应用此刻是否应当被拦（专注模式 / 单应用超限 / 总时长超限 / 免打扰时段） */
     fun isBlockedNow(ctx: Context, pkg: String): Boolean {
         if (rules[pkg] == null) return false
+
+        // 专注模式优先级最高：受管应用直接拦，不看额度
+        if (focusActive()) return true
 
         if (inCurfew()) return true
 
@@ -455,6 +491,8 @@ object Guard {
         o.put("policy", policy)
         o.put("fg", UsageUtil.foregroundPackage(ctx))
         o.put("curfew", inCurfew())
+        o.put("focus", focusActive())
+        o.put("focusRemain", focusRemainMinutes())
         o.put("totalLimit", totalLimitMin)
         o.put("totalUsed", totalUsedMinutes(ctx))
         o.put("weekend", isWeekend())

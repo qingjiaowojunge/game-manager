@@ -115,6 +115,37 @@ class GameBridge(private val activity: Activity) {
         safeUnit { Guard.resume(activity) }
     }
 
+    /* ---------- 专注模式 ---------- */
+
+    /** 开启专注 minutes 分钟：受管应用一律打开不了，不消耗额度 */
+    @JavascriptInterface
+    fun startFocus(minutes: Int) {
+        safeUnit {
+            Guard.startFocus(activity, minutes)
+            // 开着拦截层时立刻把它撤掉，避免界面停在"今日时间已用完"的旧文案上
+            OverlayBlocker.hide()
+            Enforcer.blockShowing = false
+        }
+    }
+
+    @JavascriptInterface
+    fun stopFocus() {
+        safeUnit {
+            Guard.stopFocus(activity)
+            OverlayBlocker.hide()
+            Enforcer.blockShowing = false
+        }
+    }
+
+    /** {active:Boolean, remain:Int} */
+    @JavascriptInterface
+    fun getFocus(): String = safe("{\"active\":false,\"remain\":0}") {
+        org.json.JSONObject()
+            .put("active", Guard.focusActive())
+            .put("remain", Guard.focusRemainMinutes())
+            .toString()
+    }
+
     /** 执行策略：block / block_home / lock */
     @JavascriptInterface
     fun setPolicy(p: String) {

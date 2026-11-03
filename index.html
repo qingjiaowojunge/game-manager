@@ -80,6 +80,13 @@
   .rk-name{flex:1;min-width:0;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .rk-name .tag{font-size:10.5px;font-weight:700;color:var(--primary);background:var(--primary-50);border-radius:5px;padding:1px 5px;margin-left:6px;}
   .rk-val{font-size:13px;font-weight:700;color:var(--primary);flex:none;}
+  /* 专注模式 */
+  .fchips{display:flex;gap:8px;}
+  .chip{flex:1;min-width:0;padding:10px 4px;border:1px solid var(--border);border-radius:10px;background:#fff;
+    font-size:13px;font-weight:700;color:var(--muted);font-family:inherit;cursor:pointer;}
+  .chip.active{border-color:var(--primary);color:var(--primary);background:var(--primary-50);}
+  .focus-big{font-size:36px;font-weight:800;color:#3730a3;text-align:center;letter-spacing:1px;
+    font-variant-numeric:tabular-nums;padding:8px 0 4px;}
   /* 崩溃日志 */
   .crashbox{background:#0f172a;color:#e2e8f0;font-size:11px;line-height:1.55;border-radius:10px;
     padding:12px;max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:10px 0 0;
@@ -167,6 +174,7 @@
     background:var(--success-bg);color:#166534;font-size:13px;font-weight:600;}
   .guardbar.paused{background:var(--warning-bg);color:#92400e;}
   .guardbar.off{background:#f1f5f9;color:var(--muted);}
+  .guardbar.focus{background:#e0e7ff;color:#3730a3;}
   .guardbar .dot{width:8px;height:8px;border-radius:50%;background:currentColor;flex:none;}
   .guardbar .gtxt{flex:1;min-width:0;}
   .guardbar .gbtn{border:1.5px solid currentColor;background:transparent;color:inherit;font-size:12.5px;
@@ -239,6 +247,24 @@
           <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V11M10 20V4M16 20V14M22 20V8"/></svg>今天都在用什么</h3>
           <div id="rankList"><div class="empty" style="padding:16px 0;">正在读取真实用量…</div></div>
           <div class="note">包含<b>未纳入管控</b>的应用，用来判断到底该管哪一个。</div>
+        </div>
+        <div class="card" id="focusCard">
+          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>专注模式</h3>
+          <div id="focusIdle">
+            <div class="fchips" id="focusChips">
+              <button class="chip" data-min="25">25 分</button>
+              <button class="chip active" data-min="45">45 分</button>
+              <button class="chip" data-min="60">60 分</button>
+              <button class="chip" data-min="90">90 分</button>
+            </div>
+            <button class="btn" id="focusStart" style="margin-top:10px;">开始专注</button>
+          </div>
+          <div id="focusRunning" class="hidden">
+            <div class="focus-big" id="focusCount">45:00</div>
+            <div class="note" id="focusNote">专注中：受管应用一律打不开，且不消耗今天的额度。</div>
+            <button class="btn red" id="focusStop" style="margin-top:10px;">结束专注</button>
+          </div>
+          <div class="note">只作用于「应用」页勾选的那些应用。电话、短信、相机这些没勾选的不受影响，不会被误锁。</div>
         </div>
         <div class="card">
           <button class="btn red" id="lockBtn">一键锁机</button>
@@ -460,7 +486,7 @@
   function hasOverlay(){ if(!NATIVE) return false; try{ return GameBridge.hasOverlayPermission(); }catch(e){ return false; } }
 
   /* ---------- 管控状态（一律读原生真值，不在网页里猜） ---------- */
-  var guardState={paused:false,pauseRemain:0,policy:'block',fg:''};
+  var guardState={paused:false,pauseRemain:0,policy:'block',fg:'',focus:false,focusRemain:0};
   var PREVIEW_BONUS={};
   function readGuard(){
     if(!NATIVE) return guardState;
@@ -521,6 +547,11 @@
       t.textContent='管控已暂停'+(g.pauseRemain>0?'，还剩 '+g.pauseRemain+' 分钟':'（无限期）');
       btn.textContent='恢复';
       btn.onclick=doResume;
+    } else if(g.focus){
+      bar.className='guardbar focus';
+      t.textContent='专注模式中，还剩 '+(g.focusRemain||0)+' 分钟';
+      btn.textContent='结束专注';
+      btn.onclick=function(){ if(NATIVE){ try{ GameBridge.stopFocus(); }catch(e){} } refreshGuardBar(); renderFocus(true); };
     } else if(g.curfew){
       bar.className='guardbar paused';
       t.textContent='免打扰时段生效中，受管应用已拦截';
@@ -836,16 +867,31 @@
   function showParent(){ mode='parent'; setSeg('parent');
     document.getElementById('parentView').classList.remove('hidden'); document.getElementById('childView').classList.add('hidden');
     hideLock();
-    lsSet(MODE_KEY,'parent'); refreshPermStates(); refreshBanners(); refreshGuardBar(); renderOverview(); renderRank(); renderStats(); }
+    lsSet(MODE_KEY,'parent'); refreshPermStates(); refreshBanners(); refreshGuardBar(); renderOverview(); renderRank(); renderStats(); renderFocus(true); }
   function showChild(){ mode='child'; setSeg('child');
     document.getElementById('parentView').classList.add('hidden'); document.getElementById('childView').classList.remove('hidden');
     hideLock();
     lsSet(MODE_KEY,'child'); refreshBanners(); renderKid(); }
+  /* 密码尝试限制：默认 1234 太好猜，给个基本的门槛 */
+  var PW_TRY='gm_pw_try', PW_LOCK='gm_pw_lock';
   function requestParent(){
     if(!cfg.password){ showParent(); return; }
+    var lockUntil=parseInt(lsGet(PW_LOCK)||'0',10);
+    if(lockUntil>Date.now()){
+      alert('错太多次了，请 '+Math.ceil((lockUntil-Date.now())/1000)+' 秒后再试。');
+      return;
+    }
     var pwd=window.prompt('请输入家长密码：');
     if(pwd===null) return;
-    if(pwd===cfg.password){ showParent(); } else { alert('密码错误'); }
+    if(pwd===cfg.password){ lsSet(PW_TRY,'0'); showParent(); return; }
+    var n=parseInt(lsGet(PW_TRY)||'0',10)+1;
+    if(n>=5){
+      lsSet(PW_TRY,'0'); lsSet(PW_LOCK,String(Date.now()+60000));
+      alert('连续错 5 次，锁定 1 分钟。');
+    } else {
+      lsSet(PW_TRY,String(n));
+      alert('密码错误（第 '+n+' 次，错满 5 次锁 1 分钟）');
+    }
   }
   document.getElementById('segChild').onclick=function(){ showChild(); };
   document.getElementById('segParent').onclick=function(){ if(mode==='child') requestParent(); else showParent(); };
@@ -859,7 +905,7 @@
       document.querySelectorAll('#parentView .page').forEach(function(pg){pg.classList.remove('active');});
       document.getElementById('p-'+t.dataset.page).classList.add('active');
       if(t.dataset.page==='apps') loadApps();
-      if(t.dataset.page==='overview'){ renderOverview(); renderRank(); }
+      if(t.dataset.page==='overview'){ renderOverview(); renderRank(); renderFocus(true); }
       if(t.dataset.page==='stats') renderStats();
       if(t.dataset.page==='me'){ refreshPermStates(); renderAudit(); renderVerLine(); }
     };
@@ -869,6 +915,8 @@
   document.getElementById('pwSave').onclick=function(){
     var v=document.getElementById('pwInput').value.trim();
     if(!v){ alert('密码不能为空'); return; }
+    if(v.length<4){ alert('密码至少 4 位。'); return; }
+    if(v==='1234' && !confirm('1234 是最容易被猜到的密码，确定要用？')) return;
     cfg.password=v; saveCfg();
     if(NATIVE){ try{ GameBridge.setParentPassword(v); }catch(e){} }
     toast('家长密码已保存');
@@ -901,6 +949,69 @@
     renderAppList(); renderOverview(); renderStats(); refreshGuardBar();
     toast('已把 '+cfg.managedApps.length+' 个应用统一设为每天 '+v+' 分钟');
   };
+
+  /* ---------- 专注模式 ---------- */
+  var focusMin=45, focusEndAt=0;
+  function secText(sec){
+    sec=Math.max(0,sec|0);
+    var m=Math.floor(sec/60), ss=sec%60;
+    return (m<10?'0':'')+m+':'+(ss<10?'0':'')+ss;
+  }
+  function renderFocus(force){
+    var idle=document.getElementById('focusIdle'), run=document.getElementById('focusRunning');
+    if(!idle || !run) return;
+    var g=readGuard();
+    var active=!!g.focus, remain=g.focusRemain||0;
+    if(active){
+      if(force || !focusEndAt || remain*60000 > (focusEndAt-Date.now())+7000){
+        focusEndAt=Date.now()+remain*60000;
+      }
+      idle.classList.add('hidden'); run.classList.remove('hidden');
+      var el=document.getElementById('focusCount');
+      if(el) el.textContent=secText(Math.round((focusEndAt-Date.now())/1000));
+    } else {
+      focusEndAt=0;
+      idle.classList.remove('hidden'); run.classList.add('hidden');
+    }
+  }
+  function focusTick(){
+    if(!focusEndAt) return;
+    var pg=document.getElementById('p-overview');
+    if(!pg || !pg.classList.contains('active') || mode!=='parent') return;
+    var left=Math.round((focusEndAt-Date.now())/1000);
+    var el=document.getElementById('focusCount');
+    if(el) el.textContent=secText(left);
+    if(left<=0){ focusEndAt=0; renderFocus(true); refreshGuardBar(); }
+  }
+  setInterval(focusTick, 1000);
+
+  (function bindFocus(){
+    var chips=document.querySelectorAll('#focusChips .chip');
+    for(var i=0;i<chips.length;i++){
+      chips[i].onclick=(function(c){
+        return function(){
+          for(var j=0;j<chips.length;j++) chips[j].classList.remove('active');
+          c.classList.add('active');
+          focusMin=parseInt(c.dataset.min,10)||45;
+        };
+      })(chips[i]);
+    }
+    var st=document.getElementById('focusStart');
+    if(st) st.onclick=function(){
+      if(!NATIVE){ toast('网页预览不支持真拦截'); return; }
+      if(cfg.managedApps.length===0){ alert('先去「应用」页勾选要管控的应用，专注模式才有对象。'); return; }
+      try{ GameBridge.startFocus(focusMin); }catch(e){}
+      toast('专注开始：'+focusMin+' 分钟');
+      renderFocus(true); refreshGuardBar();
+    };
+    var sp=document.getElementById('focusStop');
+    if(sp) sp.onclick=function(){
+      if(NATIVE){ try{ GameBridge.stopFocus(); }catch(e){} }
+      focusEndAt=0;
+      toast('专注已结束');
+      renderFocus(true); refreshGuardBar();
+    };
+  })();
 
   /* ---------- 崩溃日志 ---------- */
   function renderVerLine(){
@@ -1049,7 +1160,7 @@
     var startMode = lsGet(MODE_KEY)||'parent';
     if(startMode==='child'){ showChild(); } else { showParent(); }
   }catch(e){ showParent(); }
-  refreshBanners(); refreshGuardBar(); renderVerLine();
+  refreshBanners(); refreshGuardBar(); renderVerLine(); renderFocus(true);
 })();
 </script>
 </body>

@@ -34,6 +34,9 @@ class MonitorService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
 
+    /** 上一次通知栏文案，没变化就不重复 notify，省电也避免通知栏抖 */
+    private var lastState: String = ""
+
     override fun onCreate() {
         super.onCreate()
         try { Guard.init(this) } catch (e: Throwable) { }
@@ -58,6 +61,7 @@ class MonitorService : Service() {
             stopSelf()
             return
         }
+        try { lastState = stateText() } catch (e: Throwable) { }
         loop()
     }
 
@@ -75,6 +79,9 @@ class MonitorService : Service() {
     }
 
     private fun tick() {
+        // 通知栏文案先刷新：即使后面因为暂停/没权限提前返回，通知也应该是当前的
+        try { refreshNotification() } catch (e: Throwable) { }
+
         if (Guard.isPausedNow()) return
         if (!Guard.hasRules()) return
         if (!UsageUtil.hasUsagePermission(this)) return
@@ -116,10 +123,7 @@ class MonitorService : Service() {
     private fun notifyRemaining(pkg: String) {
         try {
             ensureChannel()
-            val name = try {
-                val ai = packageManager.getApplicationInfo(pkg, 0)
-                packageManager.getApplicationLabel(ai).toString()
-            } catch (e: Exception) { pkg }
+            val name = appLabel(pkg)
             val remain = (Guard.effectiveLimitMinutes(this, pkg) - Guard.usedMinutes(this, pkg)).coerceAtLeast(0)
             val nm = getSystemService(NotificationManager::class.java) ?: return
             nm.notify(
@@ -134,22 +138,78 @@ class MonitorService : Service() {
         } catch (e: Throwable) { }
     }
 
+    private fun appLabel(pkg: String): String = try {
+        val ai = packageManager.getApplicationInfo(pkg, 0)
+        packageManager.getApplicationLabel(ai).toString()
+    } catch (e: Exception) {
+        pkg
+    }
+
+    /**
+     * 通知栏那一行写什么。
+     * 原则：写"最紧张的那个"——家长下拉通知栏就能看到还剩多少，不用点进来翻两页。
+     */
+    private fun stateText(): String {
+        return try {
+            when {
+                !Guard.hasRules() -> "未配置受管控应用"
+                Guard.isPausedNow() -> {
+                    val r = Guard.pauseRemainMinutes()
+                    if (r > 0) "管控已暂停，还剩 $r 分钟" else "管控已暂停（无限期）"
+                }
+                Guard.focusActive() -> "专注模式中，还剩 ${Guard.focusRemainMinutes()} 分钟"
+                Guard.inCurfew() -> "免打扰时段，受管应用已拦截"
+                else -> remainText()
+            }
+        } catch (e: Throwable) {
+            "正在监控"
+        }
+    }
+
+    /** 找出受管应用里剩得最少的那个（总时长更紧就用总时长） */
+    private fun remainText(): String {
+        var bestPkg = ""
+        var best = Int.MAX_VALUE
+        for (pkg in Guard.managedPackages()) {
+            val limit = Guard.effectiveLimitMinutes(this, pkg)
+            if (limit <= 0) continue
+            val remain = limit - Guard.usedMinutes(this, pkg)
+            if (remain < best) {
+                best = remain
+                bestPkg = pkg
+            }
+        }
+        if (Guard.totalLimit() > 0) {
+            val tr = Guard.totalLimit() - Guard.totalUsedMinutes(this)
+            if (tr < best) {
+                return if (tr <= 0) "今日总时长已用完" else "今日总时长还剩 $tr 分钟"
+            }
+        }
+        if (bestPkg.isEmpty()) return "正在监控 ${Guard.ruleCount()} 个应用"
+        val name = appLabel(bestPkg)
+        return if (best <= 0) "$name 今日已用完" else "$name 还剩 $best 分钟"
+    }
+
+    /** 只在文案真的变了才更新，避免每 10 秒刷一次通知 */
+    private fun refreshNotification() {
+        val s = stateText()
+        if (s == lastState) return
+        lastState = s
+        val nm = getSystemService(NotificationManager::class.java) ?: return
+        nm.notify(NOTIF_ID_SERVICE, buildNotification())
+    }
+
     private fun buildNotification(): Notification {
         ensureChannel()
         val pi = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
         )
-        val state = when {
-            Guard.isPausedNow() -> "已暂停管控"
-            !Guard.hasRules() -> "未配置受管控应用"
-            Guard.inCurfew() -> "免打扰时段，已拦截"
-            else -> "正在监控 ${Guard.ruleCount()} 个应用"
-        }
         return NotificationCompat.Builder(this, CHANNEL)
             .setContentTitle("游戏管理软件")
-            .setContentText(state)
+            .setContentText(stateText())
             .setSmallIcon(R.drawable.ic_notif)
             .setContentIntent(pi)
+            .setOnlyAlertOnce(true)
             .setOngoing(true)
             .build()
     }
