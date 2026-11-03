@@ -293,6 +293,26 @@ class GameBridge(private val activity: Activity) {
         safeUnit { App.clearCrash(activity) }
     }
 
+    /** 一键复制（崩溃堆栈太长，靠长按选中再复制太折腾） */
+    @JavascriptInterface
+    fun copyText(text: String) {
+        safeUnit {
+            val cm = activity.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("崩溃日志", text))
+            activity.runOnUiThread {
+                Toast.makeText(activity, "已复制，直接粘贴发出去就行", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    /** 当前安装版本，排障时先看这个，免得来回问"你装的是哪一版" */
+    @JavascriptInterface
+    fun getVersion(): String = safe("?") {
+        val pi = activity.packageManager.getPackageInfo(activity.packageName, 0)
+        val code = if (android.os.Build.VERSION.SDK_INT >= 28) pi.longVersionCode else pi.versionCode.toLong()
+        "v${pi.versionName ?: "?"} ($code)"
+    }
+
     /* ---------- Intent 收口 ---------- */
 
     private fun overlayIntent() = Intent(

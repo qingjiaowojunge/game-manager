@@ -328,7 +328,9 @@
           <div class="note" id="crashHint">如果应用闪退过，这里能看到原因。把内容发给我就能定位。</div>
           <pre id="crashBox" class="crashbox hidden"></pre>
           <button class="btn ghost sm" id="crashView" style="width:100%;margin-top:10px;">查看最近一次崩溃</button>
+          <button class="btn ghost sm" id="crashCopy" style="width:100%;margin-top:8px;">复制内容</button>
           <button class="btn ghost sm" id="crashClear" style="width:100%;margin-top:8px;">清除记录</button>
+          <div class="note" id="verLine" style="margin-top:10px;">当前版本：读取中…</div>
         </div>
 
         <div class="card">
@@ -859,7 +861,7 @@
       if(t.dataset.page==='apps') loadApps();
       if(t.dataset.page==='overview'){ renderOverview(); renderRank(); }
       if(t.dataset.page==='stats') renderStats();
-      if(t.dataset.page==='me'){ refreshPermStates(); renderAudit(); }
+      if(t.dataset.page==='me'){ refreshPermStates(); renderAudit(); renderVerLine(); }
     };
   });
 
@@ -901,6 +903,14 @@
   };
 
   /* ---------- 崩溃日志 ---------- */
+  function renderVerLine(){
+    var el=document.getElementById('verLine');
+    if(!el) return;
+    if(!NATIVE){ el.textContent='当前版本：网页预览模式（没有原生信息）'; return; }
+    var v='';
+    try{ v=GameBridge.getVersion(); }catch(e){ v=''; }
+    el.textContent='当前版本：'+(v||'读取失败');
+  }
   document.getElementById('crashView').onclick=function(){
     var box=document.getElementById('crashBox');
     box.classList.remove('hidden');
@@ -908,6 +918,21 @@
     var txt='';
     try{ txt=GameBridge.getLastCrash(); }catch(e){ txt=''; }
     box.textContent = txt ? txt : '没有崩溃记录。说明上次运行是正常的。';
+  };
+  document.getElementById('crashCopy').onclick=function(){
+    var box=document.getElementById('crashBox');
+    var t=box.textContent||'';
+    if(!t || box.classList.contains('hidden')){ toast('先点「查看最近一次崩溃」'); return; }
+    if(NATIVE){
+      try{ GameBridge.copyText(t); return; }catch(e){}
+    }
+    // 浏览器兜底
+    try{
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(t); toast('已复制'); return;
+      }
+    }catch(e){}
+    toast('请长按选中文字复制');
   };
   document.getElementById('crashClear').onclick=function(){
     if(NATIVE){ try{ GameBridge.clearCrash(); }catch(e){} }
@@ -1024,7 +1049,7 @@
     var startMode = lsGet(MODE_KEY)||'parent';
     if(startMode==='child'){ showChild(); } else { showParent(); }
   }catch(e){ showParent(); }
-  refreshBanners(); refreshGuardBar();
+  refreshBanners(); refreshGuardBar(); renderVerLine();
 })();
 </script>
 </body>
