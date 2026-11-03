@@ -69,15 +69,15 @@ WebView 的渲染进程是独立进程。内存紧张、或厂商 ROM 清理后�
 - 手机下载页：<https://qingjiaowojunge.github.io/game-manager/>
 - 仓库：<https://github.com/qingjiaowojunge/game-manager>
 
-> 当前版本 **v2.3**（`versionCode 5` / `versionName 2.3`），推到这个地址即最新。
+> 当前版本 **v2.4**（`versionCode 6` / `versionName 2.4`），推到这个地址即最新。
 
 ### 本版产物核验（不是"构建成功"就算数，已逐个查过）
 
 | 检查项 | 结果 |
 |---|---|
 | CI | run `41632958894`(v1.0.8) / `41633737189`(v1.0.9) / `41634691926`(v1.0.10) 均 build ✅ pages ✅ |
-| Release | **`v1.0.11`**（v2.3）· `GameManager.apk` · 2,098,167 字节 |
-| SHA256 | `e6b6794c993c0af14a0b991f12e2bb3c5b77e34000c6ed14799a0452bcd6ea11` |
+| Release | **`v1.0.12`**（v2.4）· `GameManager.apk` · 2,102,355 字节 |
+| SHA256 | `9e3b8ffefbe47214c9922d0139fb07e1133449e394a56fb1e59a01527c68f781` |
 | Pages 上的包与 Release 是否同一份 | **是**（同一 sha256） |
 | `assets/index.html` | 含 `getTodayRanking / getLastCrash / getAuditLog / addBonus / exemptToday / batchApply / guardBar`，含「工作日 / 周末 / 免打扰 / 每日总时长 / 操作记录 / 崩溃日志」 |
 | dex | 含 `Guard / Enforcer / OverlayBlocker / BlockActivity / MonitorService / UsageUtil / GameBridge / MainActivity`，含 `isBlockedNow / shouldNotifyRemaining / inCurfew / totalUsedMinutes / rankingJson / readCrash / auditJson / requestHome` |
