@@ -69,16 +69,17 @@ WebView 的渲染进程是独立进程。内存紧张、或厂商 ROM 清理后�
 - 手机下载页：<https://qingjiaowojunge.github.io/game-manager/>
 - 仓库：<https://github.com/qingjiaowojunge/game-manager>
 
-> 当前版本 **v2.4 (8)**（`versionName 2.4` / `versionCode 8`），推到这个地址即最新。
-> 下载文件名带版本号（如 `GameManager-v2.4-8.apk`），**不会被浏览器缓存成旧包**；换版本时文件名必然变化。
+> 当前版本 **v2.5 (9)**（`versionName 2.5` / `versionCode 9`），推到这个地址即最新。
+> 下载文件名带版本号（如 `GameManager-v2.5-9.apk`），**不会被浏览器缓存成旧包**；换版本时文件名必然变化。
 
 ### 本版产物核验（不是"构建成功"就算数，已逐个查过）
 
 | 检查项 | 结果 |
 |---|---|
 | CI | run `41632958894`(v1.0.8) / `41633737189`(v1.0.9) / `41634691926`(v1.0.10) 均 build ✅ pages ✅ |
-| Release | **`v1.0.14`**（v2.4 build 8）· `GameManager-v2.4-8.apk` · 2,102,355 字节 |
-| SHA256 | `485966900b69b2a1…`（完整值见下载页或 `apk.sha256`） |
+| Release | **`v1.0.15`**（v2.5 build 9）· `GameManager-v2.5-9.apk` · 2,102,967 字节 |
+| SHA256 | `200f217848caae36b2458e515ea69bada68a82adcbb6070931751157a57c565e` |
+| 签名证书 SHA256 | `80:48:4E:…:7E:F5:53`（与仓库 `android/app/gm-release.jks` 完全一致，已用 APK 签名块逐字节比对） |
 | Pages 上的包与 Release 是否同一份 | **是**（同一 sha256） |
 | `assets/index.html` | 含 `getTodayRanking / getLastCrash / getAuditLog / addBonus / exemptToday / batchApply / guardBar`，含「工作日 / 周末 / 免打扰 / 每日总时长 / 操作记录 / 崩溃日志」 |
 | dex | 含 `Guard / Enforcer / OverlayBlocker / BlockActivity / MonitorService / UsageUtil / GameBridge / MainActivity`，含 `isBlockedNow / shouldNotifyRemaining / inCurfew / totalUsedMinutes / rankingJson / readCrash / auditJson / requestHome` |
