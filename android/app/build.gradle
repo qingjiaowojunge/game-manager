@@ -9,16 +9,33 @@ android {
         applicationId "com.example.gamemanager"
         minSdk 26
         targetSdk 34
-        versionCode 8
-        versionName "2.4"
+        versionCode 9
+        versionName "2.5"
+    }
+
+    /**
+     * 固定签名（关键）。
+     * 之前用 CI 每次临时生成的 debug.keystore → 每版签名不同 → 安卓拒绝覆盖安装，
+     * 只能先卸载；而卸载又被设备管理员挡住，形成死锁。
+     * 现在 debug/release 都签同一套证书，版本之间可直接覆盖升级。
+     */
+    signingConfigs {
+        fixed {
+            storeFile file("gm-release.jks")
+            storePassword "gm123456"
+            keyAlias "gmkey"
+            keyPassword "gm123456"
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
+            signingConfig signingConfigs.fixed
         }
         debug {
             minifyEnabled false
+            signingConfig signingConfigs.fixed
         }
     }
 

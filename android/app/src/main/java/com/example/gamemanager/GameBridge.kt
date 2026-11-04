@@ -236,6 +236,36 @@ class GameBridge(private val activity: Activity) {
         }
     }
 
+    /**
+     * 取消设备管理员。
+     * 只要应用还是设备管理员，安卓就禁止卸载——这是"装了删不掉"的唯一原因。
+     */
+    @JavascriptInterface
+    fun removeAdmin() {
+        safeUnit {
+            if (dpm.isAdminActive(admin)) dpm.removeActiveAdmin(admin)
+        }
+    }
+
+    /**
+     * 一键彻底退出：停监控、清规则、结束专注、撤拦截层、取消设备管理员。
+     * 目的是"用户想卸载时能卸得掉"，不留任何系统级占用。
+     */
+    @JavascriptInterface
+    fun releaseAll() {
+        safeUnit {
+            try { Guard.stopFocus(activity) } catch (e: Throwable) { }
+            try { Guard.resume(activity) } catch (e: Throwable) { }
+            try { Guard.applyConfig(activity, "{\"apps\":[]}") } catch (e: Throwable) { }
+            try { OverlayBlocker.hide() } catch (e: Throwable) { }
+            Enforcer.blockShowing = false
+            try { activity.stopService(Intent(activity, MonitorService::class.java)) } catch (e: Throwable) { }
+            try {
+                if (dpm.isAdminActive(admin)) dpm.removeActiveAdmin(admin)
+            } catch (e: Throwable) { }
+        }
+    }
+
     @JavascriptInterface
     fun hasUsagePermission(): Boolean = safe(false) { UsageUtil.hasUsagePermission(activity) }
 

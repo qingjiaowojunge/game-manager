@@ -311,7 +311,7 @@
           <div class="perm-row"><span>显示在其他应用上层（拦截页必需）</span><span id="ovlState" class="perm-state no">未授予</span></div>
           <div class="perm-row"><span>使用情况访问（真实时长）</span><span id="usageState" class="perm-state no">未授予</span></div>
           <div class="perm-row"><span>无障碍（退到桌面，可选）</span><span id="accState" class="perm-state no">未开启</span></div>
-          <div class="perm-row"><span>设备管理员（锁屏，可选）</span><span id="adminState" class="perm-state no">未启用</span></div>
+          <div class="perm-row"><span>设备管理员（锁屏，可选；启用后须先"彻底解除"才能卸载）</span><span id="adminState" class="perm-state no">未启用</span></div>
           <div class="perm-row"><span>后台运行（电池优化白名单）</span><span id="battState" class="perm-state no">未加入</span></div>
           <button class="btn ghost sm" id="enableOverlay" style="margin-top:10px;">授予悬浮窗权限</button>
           <button class="btn ghost sm" id="enableUsage" style="margin-top:8px;">授予用量权限</button>
@@ -371,6 +371,8 @@
           <button class="btn ghost sm" id="pause30" style="width:100%;">暂停管控 30 分钟</button>
           <button class="btn ghost sm" id="resumeNow" style="margin-top:8px;width:100%;">立即恢复管控</button>
           <button class="btn ghost sm red" id="resetAll" style="margin-top:8px;width:100%;">清空所有管控配置</button>
+          <button class="btn ghost sm red" id="releaseAll" style="margin-top:8px;width:100%;">彻底解除管控（解除后才能卸载本应用）</button>
+          <div class="note">卸载前必须先点这个：只要设备管理员还激活着，系统就不允许卸载本应用。</div>
           <div class="note">暂停期间完全不拦截，可以用来调试或让孩子自由使用。到期自动恢复。</div>
         </div>
         <div class="note">v2 · 数据全部来自手机真实用量（UsageStatsManager）与已装应用（PackageManager）。</div>
@@ -937,6 +939,15 @@
     cfg.managedApps=[]; saveCfg(); pushManaged();
     if(NATIVE){ try{ GameBridge.stopMonitor(); }catch(e){} }
     renderAppList(); renderOverview(); renderStats(); renderKid(); refreshGuardBar();
+  };
+
+  /* ---------- 彻底解除管控（卸载前置条件） ---------- */
+  document.getElementById('releaseAll').onclick=function(){
+    if(!confirm('将停止监控、清空全部管控配置、取消设备管理员。\n\n完成后本应用才允许被卸载。确定继续？')) return;
+    if(NATIVE){ try{ GameBridge.releaseAll(); }catch(e){} }
+    cfg.managedApps=[]; saveCfg(); pushManaged();
+    renderAppList(); renderOverview(); renderStats(); renderKid(); refreshGuardBar();
+    alert('已彻底解除。\n现在可以正常卸载本应用了。');
   };
 
   /* ---------- 批量设置限额 ---------- */
